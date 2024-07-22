@@ -65,7 +65,7 @@ bool PianoRecognition::recognize_piano(Mat img , std::vector<Point>&contour) {
     }
     // not match
     std::cout << "good_matches : " << good_matches.size() << "\n";
-    if(good_matches.size() <= 3) { return false; }
+    if(good_matches.size() <= 4) { return false; }
     
     // matched, find the contours
     Mat binary_img = PianoRecognition::filter_piano_image(img);
@@ -119,7 +119,7 @@ bool PianoRecognition::process_piano_calibration(void) {
     Rect prev_bounding_rect;
 
     int overlap_streak = 0;
-    const int overlap_streak_threshold = 30;
+    const int overlap_streak_threshold = 100;
     
     Mat debug_copy;
     while(1) {
@@ -128,9 +128,9 @@ bool PianoRecognition::process_piano_calibration(void) {
             std::cout << "video error!\n";
             return false;
         }
-        Mat resized_frame; 
-        resize(frame , resized_frame , Size(frame.size().width*0.5 , frame.size().height*0.5));
-        frame = resized_frame;
+
+        int width = 800;
+        resize(frame , frame , Size(width , ((float)frame.size().height*((float)width/(float)frame.size().width)) ));
 
         // for debugging purpose
         
@@ -153,7 +153,7 @@ bool PianoRecognition::process_piano_calibration(void) {
         std::cout << "area_overlap = " << area_overlap << "\n";
         std::cout << "area_current = " << area_current << "\n";
         if(area_overlap >= area_current*0.90 && area_overlap != 0) {
-            overlap_streak += 5;
+            overlap_streak += 2;
             std::cout << " ---- overlap_streak : " << overlap_streak << "\n";
             
             // the piano is finally recognized
