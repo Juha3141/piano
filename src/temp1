@@ -1,0 +1,50 @@
+
+
+    // Mat edges;
+    // Canny(only_piano , edges , 100 , 200);
+    Mat opened;
+    
+    morphologyEx(only_piano , opened , MORPH_OPEN , getStructuringElement(MORPH_RECT , Size(5 , 5)));
+    // inRange(eroded , Scalar(0x00 , 0x00 , 0x00) , Scalar(0x30 , 0x30 , 0x30))
+    std::vector<std::vector<Point>>contours;
+    
+    // imshow("win3" , adjusted);
+    // imshow("win3" , edges);
+
+    Mat highly_dilated;
+    dilate(opened , highly_dilated , Mat() , Point(-1 , -1) , 6);
+    morphologyEx(highly_dilated , highly_dilated , MORPH_OPEN , getStructuringElement(MORPH_RECT , Size(5 , 5)));
+    cvtColor(highly_dilated , highly_dilated , COLOR_BGR2GRAY);
+    threshold(highly_dilated , highly_dilated , 100 , 255 , THRESH_BINARY_INV|THRESH_OTSU);
+
+    Mat only_piano_gray;
+    Mat adaptive;
+    cvtColor(opened , only_piano_gray , COLOR_BGR2GRAY);
+    
+    adaptiveThreshold(only_piano_gray , adaptive , 255 , ADAPTIVE_THRESH_GAUSSIAN_C , THRESH_BINARY , 13 , 5);
+
+    adaptive = adaptive|highly_dilated;
+    erode(adaptive , adaptive , Mat() , Point(-1 , -1) , 1);
+
+    Mat empty = Mat::zeros(adaptive.size() , adaptive.type());
+    std::vector<std::vector<Point>>canny_contours;
+    namedWindow("empty" , WINDOW_NORMAL);
+    
+    Mat canny;
+    Canny(adaptive , canny , 100 , 255 , 3);
+
+    Mat canny_color;
+    cvtColor(canny , canny_color , COLOR_GRAY2BGR);
+    RNG rng((unsigned int)time(0));
+    // floodFill(canny , );
+    findContoursLinkRuns(canny , canny_contours);
+    namedWindow("winD" , WINDOW_NORMAL);
+    for(int i = 0; i < canny_contours.size(); i++) {
+        Scalar color = Scalar(rng.uniform(0 , 255) , rng.uniform(0 , 255) , rng.uniform(0 , 255));
+        if(arcLength(canny_contours[i] , false) < 100) continue;
+
+        drawContours(canny_color , canny_contours , i , color , -1);
+    }
+
+    namedWindow("only_piano" , WINDOW_NORMAL);
+    namedWindow("highly_dilated" , WINDOW_NORMAL);

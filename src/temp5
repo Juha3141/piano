@@ -1,0 +1,84 @@
+#include <opencv2/objdetect.hpp>
+#include <opencv2/highgui.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/dnn/dnn.hpp>
+#include <opencv2/features2d.hpp>
+
+#include <iostream>
+#include <cstdio>
+#include <vector>
+#include <algorithm>
+#include <iterator>
+#include <string>
+
+using namespace cv;
+
+void get_min_max_x_point(std::vector<Point> &cont_obj , Point &min_x , Point &max_x);
+void get_min_max_y_point(std::vector<Point> &cont_obj , Point &min_y , Point &max_y);
+
+int main(int argc , char **argv) {
+    Mat image = imread(argv[1] , IMREAD_COLOR);
+    Mat typical_piano = imread("normal_piano_filter.jpg" , IMREAD_COLOR);
+    // image processing
+    Mat blurred_image;
+    medianBlur(image , blurred_image , 11);
+    
+    Mat img_threshold;
+    Mat gray_scale;
+    cvtColor(blurred_image , gray_scale , COLOR_RGB2GRAY);
+    threshold(gray_scale , img_threshold , 100 , 255 , THRESH_OTSU|THRESH_BINARY);
+
+    std::vector<std::vector<Point>>contours;
+    std::vector<Vec4i>hierarchy;
+
+    // find contours
+    findContours(img_threshold , contours , RETR_EXTERNAL , CHAIN_APPROX_SIMPLE);
+
+    RNG rng(1982731);
+    std::vector<Point> max_contour;
+    for(int i = 0; i < contours.size(); i++) {
+        Scalar color = Scalar(rng.uniform(0 , 255) , rng.uniform(0 , 255) , rng.uniform(0 , 255));
+        drawContours(image , contours , i , color , 25 , 5 , hierarchy);
+
+        std::vector<Point> cont_obj = contours.at(i);
+
+        // calculate minimum and maximum x points from the contour
+        Point p_min_x , p_max_x;
+        Point p_min_y , p_max_y;
+        get_min_max_x_point(cont_obj , p_min_x , p_max_x);
+        get_min_max_y_point(cont_obj , p_min_y , p_max_y);
+        
+        // establish the box from the min,max points
+        rectangle(image , Rect(Point(p_min_x.x , p_min_y.y) , Point(p_max_x.x , p_max_y.y)) , color , 10);
+        Mat cut_image = image(Rect(Point(p_min_x.x , p_min_y.y) , Point(p_max_x.x , p_max_y.y)));
+    }
+
+    // show things
+    namedWindow("win" , WINDOW_NORMAL);
+    namedWindow("original" , WINDOW_NORMAL);
+    imshow("win" , img_threshold);
+    imshow("original" , image);
+    resizeWindow("win" , 1024 , 768);
+    resizeWindow("original" , 1024 , 768);
+
+    
+    while(1) {
+        if(waitKey(0) == 27) break;
+    }
+
+    return 0;
+}
+
+void get_min_max_x_point(std::vector<Point> &cont_obj , Point &min_x , Point &max_x) {
+    std::vector<Point>::iterator min_x_it = std::min_element(cont_obj.begin() , cont_obj.end() , [](const auto &a , const auto &b) { return (bool)(a.x < b.x); });
+    std::vector<Point>::iterator max_x_it = std::max_element(cont_obj.begin() , cont_obj.end() , [](const auto &a , const auto &b) { return (bool)(a.x < b.x); });
+    min_x = *min_x_it;
+    max_x = *max_x_it;
+}
+
+void get_min_max_y_point(std::vector<Point> &cont_obj , Point &min_y , Point &max_y) {
+    std::vector<Point>::iterator min_y_it = std::min_element(cont_obj.begin() , cont_obj.end() , [](const auto &a , const auto &b) { return (bool)(a.y < b.y); });
+    std::vector<Point>::iterator max_y_it = std::max_element(cont_obj.begin() , cont_obj.end() , [](const auto &a , const auto &b) { return (bool)(a.y < b.y); });
+    min_y = *min_y_it;
+    max_y = *max_y_it;
+}

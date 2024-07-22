@@ -1,0 +1,24 @@
+
+    /*
+    findContours(eroded_thresh , contours , RETR_EXTERNAL , CHAIN_APPROX_SIMPLE);
+    
+    RNG rng(2387432);
+    Mat eroded_gray_rev;
+    cvtColor(eroded_gray , eroded_gray_rev , COLOR_GRAY2BGR);
+    for(int i = 0; i < contours.size(); i++) {
+        drawContours(eroded_gray_rev , contours , i , Scalar(rng.uniform(0 , 256) , rng.uniform(0 , 256) , rng.uniform(0 , 256)) , 2);
+    }
+    */
+/*
+    double alpha = 4.0 , beta = 0.0;
+    Mat adjusted = Mat::zeros(only_piano.size() , CV_8UC3);
+    for(int i = 0; i < only_piano.rows; i++) {
+        for(int j = 0; j < only_piano.cols; j++) {
+            for(int c = 0; c < only_piano.channels(); c++) {
+                Vec3b &p = only_piano.at<Vec3b>(i , j);
+                Vec3b &ap = adjusted.at<Vec3b>(i , j);
+                ap[c] = alpha*p[c]+beta;
+            }
+        }
+    }
+*/
