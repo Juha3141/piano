@@ -1,12 +1,17 @@
+/* July 2024, 💀💀💀 */
+
 #include "piano_detection.hpp"
 
 using namespace cv;
 
-#define CALIBRATION_VIDEO
+// #define CALIBRATION_VIDEO
+
+void debug_print(struct piano_keys_info &keys_info , const char *win);
+void debug_print_both(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info , const char *win);
 
 int main(int argc , char **argv) {
     Mat typical_piano = imread("most_normal_piano-2.jpg" , IMREAD_GRAYSCALE);
-    if(argc != 2) {
+    if(argc < 2) {
         std::cout << "piano [video]\n";
         return -1;
     }
@@ -14,6 +19,7 @@ int main(int argc , char **argv) {
     PianoRecognition piano(argv[1] , CAP_V4L2 , 1280 , 720 , 60 , typical_piano);
 
     std::vector<Point>contour , bounding_rect_contour;
+    RotatedRect bounding_rect;
 #ifdef CALIBRATION_VIDEO
     if(piano.process_piano_calibration() == false) {
         std::cout << "calibration failed!\n";
@@ -21,6 +27,9 @@ int main(int argc , char **argv) {
     }
 #else
     Mat img = imread(argv[1] , IMREAD_COLOR);
+    if(argc == 3 && strcmp(argv[2] , "flip") == 0) {
+        flip(img , img , 0);
+    }
     Mat resized;
 
     int width = 1024;
@@ -33,7 +42,8 @@ int main(int argc , char **argv) {
         return -1;
     }
     
-    piano.set_detected_piano_img(img , contour , bounding_rect_contour);
+    bounding_rect = minAreaRect(contour);
+    piano.set_detected_piano_img(img , contour , bounding_rect);
 #endif
 
     std::cout << "calibration done!" << "\n";
@@ -58,49 +68,61 @@ int main(int argc , char **argv) {
     cvtColor(only_piano , only_piano , COLOR_BGR2GRAY);
     // smooth the image
     morphologyEx(only_piano , only_piano , MORPH_OPEN , getStructuringElement(MORPH_RECT , Size(3 , 3)));
-
     Mat template_piano = imread("bestpiano.png" , IMREAD_GRAYSCALE);
-
-    Mat adaptive , dilated;
-
-    // dilated
-    dilate(only_piano , dilated , Mat() , Point(-1 , -1) , 4);
-    morphologyEx(dilated , dilated , MORPH_OPEN , getStructuringElement(MORPH_RECT , Size(3 , 3)));
-    threshold(dilated , dilated , 100 , 255 , THRESH_BINARY_INV|THRESH_OTSU);
-
-    // adaptive 
-    adaptiveThreshold(only_piano , adaptive , 255 , ADAPTIVE_THRESH_GAUSSIAN_C , THRESH_BINARY , 11 , 5);
-
-    // or --> noise removed
-    Mat noise_removed = adaptive|dilated;
-    erode(noise_removed , noise_removed , Mat() , Point(-1 , -1) , 2);
-
-    std::vector<std::vector<Point>>piano_contours;
-
-    Mat outline_color;
-    cvtColor(noise_removed , outline_color , COLOR_GRAY2BGR);
-    RNG rng((unsigned int)time(0));
-    // floodFill(canny , );
-    findContours(noise_removed , piano_contours , RETR_TREE , CHAIN_APPROX_SIMPLE);
-    namedWindow("canny_colored" , WINDOW_NORMAL);
-    for(int i = 0; i < piano_contours.size(); i++) {
-        Scalar color = Scalar(rng.uniform(0 , 255) , rng.uniform(0 , 255) , rng.uniform(0 , 255));
-        if(arcLength(piano_contours[i] , false) < 100) continue;
-
-        drawContours(outline_color , piano_contours , i , color , -1);
-        // std::vector<Vec2f>hull;
-        // convexHull(canny_contours[i] , hull , true , true);
-        imshow("canny_colored" , outline_color);
-    }
-
     imshow("only_piano" , only_piano);
-    imshow("noise_removed" , noise_removed);
-    imshow("adaptive" , adaptive);
-    imshow("dilated" , dilated);
-    imshow("template" , template_piano);
-//    imshow("inverted_piano" , adaptive);
+
+    struct piano_keys_info white_keys_info;
+    struct piano_keys_info black_keys_info;
+    piano.detect_white_keys(only_piano , white_keys_info);
+    piano.detect_black_keys(only_piano , black_keys_info);
+
+    piano.write_keys_info(black_keys_info);
+    piano.write_keys_info(white_keys_info);
+    
+    piano.remove_outliers(white_keys_info);
+    piano.white_auto_fill_keys(white_keys_info);
+    debug_print(white_keys_info , "win1");
+    debug_print(black_keys_info , "win2");
+    debug_print_both(white_keys_info , black_keys_info , "win3");
 
     while(1) { if(waitKey(0) == 27) break; }
 
     return 0;
+}
+
+void debug_print(struct piano_keys_info &keys_info , const char *win) {
+    Mat only_piano_copy;
+    cvtColor(keys_info.piano_image , only_piano_copy , COLOR_GRAY2BGR);
+    // draw the best fit line
+    for(double x = 0; x < only_piano_copy.size().width; x += 1) {
+        Point point(x , (keys_info.cm_bestfit_b*x)+keys_info.cm_bestfit_a);
+        circle(only_piano_copy , point , 2 , Scalar(0xff , 0x00 , 0x00) , 1);
+    }
+    for(int i = 0; i < keys_info.keys_rectangle_list.size(); i++) {
+        std::vector<Point>rectangle_contour;
+        rotated_rect_to_contour(keys_info.keys_rectangle_list[i] , rectangle_contour);
+
+        drawContours(only_piano_copy , std::vector<std::vector<Point>>({rectangle_contour}) , -1 , Scalar(0x00 , 0x00 , 0xff) , 1);
+        circle(only_piano_copy , keys_info.keys_rectangle_list[i].center , 2 , Scalar(0xff , 0x00 , 0x00) , 1);
+        if(i < keys_info.keys_rectangle_list.size()-1) {
+            line(only_piano_copy , keys_info.keys_rectangle_list[i].center , keys_info.keys_rectangle_list[i+1].center , Scalar(0x00 , 0xff , 0x00) , 1);
+        }
+    }
+    imshow(win , only_piano_copy);
+}
+
+void debug_print_both(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info , const char *win) {
+    Mat image;
+    cvtColor(white_keys_info.piano_image , image , COLOR_GRAY2BGR);
+    for(RotatedRect r : white_keys_info.keys_rectangle_list) {
+        std::vector<Point>rectangle_contour;
+        rotated_rect_to_contour(r , rectangle_contour);
+        drawContours(image , std::vector<std::vector<Point>>({rectangle_contour}) , -1 , Scalar(0xff , 0x00 , 0x00) , 2);
+    }
+    for(RotatedRect r : black_keys_info.keys_rectangle_list) {
+        std::vector<Point>rectangle_contour;
+        rotated_rect_to_contour(r , rectangle_contour);
+        drawContours(image , std::vector<std::vector<Point>>({rectangle_contour}) , -1 , Scalar(0x00 , 0xff , 0x00) , 2);
+    }
+    imshow(win , image);
 }
