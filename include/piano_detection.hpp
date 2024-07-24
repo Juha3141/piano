@@ -33,9 +33,34 @@
 #define PIANO_KEY_Bflat  11
 #define PIANO_KEY_B      12
 
-struct piano_loc_info {
-    // int 
-    int key;
+struct piano_keys_info {
+    cv::Mat piano_image;
+
+    // List of RotatedRects of the keys
+    std::vector<cv::RotatedRect>keys_rectangle_list;
+
+    // mean width, height, area of the keys
+    double mean_key_width;
+    double mean_key_height;
+    double mean_key_area;
+    double max_key_height;
+    double median_key_width;
+    double median_key_height;
+
+    // Best fit line of center of masses of keys
+    // Best fit line : y=bx+a
+    double cm_bestfit_b , cm_bestfit_a;
+
+    // List of the distance between the keys' center of masses and best fit line
+    std::vector<double>cm_dist_from_bestfit_list;
+    double mean_dist_from_bestfit;
+    // Distance between #0 and #1 = #0
+    std::vector<double>dist_between_keys_list;
+    double mean_dist_between_keys;
+    double median_dist_between_keys;
+
+    // List of the key notes
+    std::vector<int>keys_notes;
 };
 
 void get_min_max_x_point(std::vector<cv::Point> &cont_obj , cv::Point &min_x , cv::Point &max_x);
@@ -44,6 +69,7 @@ void get_min_max_y_point(std::vector<cv::Point> &cont_obj , cv::Point &min_y , c
 void create_features_info(cv::Mat img , std::vector<cv::KeyPoint>&keypoints , cv::Mat &descriptors);
 void image_detection(cv::Mat img , std::vector<cv::KeyPoint>&keypoints);
 void get_bounding_rect_contour(const std::vector<cv::Point>&contour , std::vector<cv::Point>&bounding_rect);
+void rotated_rect_to_contour(const cv::RotatedRect &rect , std::vector<cv::Point>&contour);
 
 class PianoRecognition {
     public:
@@ -59,11 +85,15 @@ class PianoRecognition {
         
         // major processes
         bool process_piano_calibration(void);
-        
-        
+
         bool recognize_piano(cv::Mat img , std::vector<cv::Point>&contour);
-        // void perspective_transformation(cv::Mat image , )
-        void detect_piano_keys(cv::Mat piano_image , std::vector<std::vector<cv::Point>>&keys_contour_list);
+        void recognize_notes(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info);
+        
+        void detect_white_keys(cv::Mat piano_image , struct piano_keys_info &keys_info);
+        void detect_black_keys(cv::Mat piano_image , struct piano_keys_info &keys_info);
+        void remove_outliers(struct piano_keys_info &keys_info);
+        void write_keys_info(struct piano_keys_info &keys_info);
+        void white_auto_fill_keys(struct piano_keys_info &keys_info);
 
         inline void set_template_piano_image(cv::Mat template_piano) {
             this->template_piano = template_piano;
@@ -82,13 +112,13 @@ class PianoRecognition {
             if(this->video_input.height != 0) { video.set(cv::CAP_PROP_FRAME_HEIGHT , this->video_input.height); }
             if(this->video_input.fps != 0)    { video.set(cv::CAP_PROP_FPS , this->video_input.fps); }
         }
-        inline void set_detected_piano_img(const cv::Mat bounding_rect_img , const std::vector<cv::Point>&bounding_contour , const std::vector<cv::Point>&bounding_rect) {
-            // copy the bounding rect contour
-            std::copy(bounding_rect.begin() , bounding_rect.end() , std::back_inserter(this->piano_bounding_rect_contour));
+        inline void set_detected_piano_img(const cv::Mat bounding_rect_img , const std::vector<cv::Point>&bounding_contour , const cv::RotatedRect &bounding_rect) {
             // copy the frame
             bounding_rect_img.copyTo(this->piano_bounding_rect_img);
             // copy the contour
             std::copy(bounding_contour.begin() , bounding_contour.end() , std::back_inserter(this->piano_bounding_contour));
+            // copy the bounding rect
+            memcpy(&this->piano_bounding_rect , &bounding_rect , sizeof(cv::RotatedRect));
             
             is_piano_detected = true;
         }
@@ -96,9 +126,12 @@ class PianoRecognition {
         static cv::Mat filter_piano_image(cv::Mat frame);
 
         bool is_piano_detected = false;
+
+        // the raw, unprocessed frame that contains the image of piano
         cv::Mat piano_bounding_rect_img;
+        // the bounding contour 
         std::vector<cv::Point>piano_bounding_contour;
-        std::vector<cv::Point>piano_bounding_rect_contour;
+        cv::RotatedRect piano_bounding_rect;
         
     private:
         struct {
