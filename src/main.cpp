@@ -1,22 +1,25 @@
 /* July 2024, 💀💀💀 */
 
-#include "piano_detection.hpp"
+#include <piano_detection.hpp>
+#include <hand_detection_agent.hpp>
 
 using namespace cv;
 
-// #define CALIBRATION_VIDEO
+#define CALIBRATION_VIDEO
 
 void debug_print(struct piano_keys_info &keys_info , const char *win);
 void debug_print_both(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info , const char *win);
 
+void frame_filter_func(Mat &frame);
+
 int main(int argc , char **argv) {
-    Mat typical_piano = imread("most_normal_piano-2.jpg" , IMREAD_GRAYSCALE);
+    Mat typical_piano = imread("most_normal_piano.jpg" , IMREAD_GRAYSCALE);
     if(argc < 2) {
         std::cout << "piano [video]\n";
         return -1;
     }
-
-    PianoRecognition piano(argv[1] , CAP_V4L2 , 1280 , 720 , 60 , typical_piano);
+    PianoRecognition piano(argv[1] , 0 , 1280 , 720 , 60 , typical_piano);
+    piano.set_frame_filter(frame_filter_func);
 
     std::vector<Point>contour , bounding_rect_contour;
     RotatedRect bounding_rect;
@@ -27,9 +30,6 @@ int main(int argc , char **argv) {
     }
 #else
     Mat img = imread(argv[1] , IMREAD_COLOR);
-    if(argc == 3 && strcmp(argv[2] , "flip") == 0) {
-        flip(img , img , 0);
-    }
     Mat resized;
 
     int width = 1024;
@@ -68,7 +68,6 @@ int main(int argc , char **argv) {
     cvtColor(only_piano , only_piano , COLOR_BGR2GRAY);
     // smooth the image
     morphologyEx(only_piano , only_piano , MORPH_OPEN , getStructuringElement(MORPH_RECT , Size(3 , 3)));
-    Mat template_piano = imread("bestpiano.png" , IMREAD_GRAYSCALE);
     imshow("only_piano" , only_piano);
 
     struct piano_keys_info white_keys_info;
@@ -79,15 +78,44 @@ int main(int argc , char **argv) {
     piano.write_keys_info(black_keys_info);
     piano.write_keys_info(white_keys_info);
     
+    std::cout << "removing outliers... \n";
     piano.remove_outliers(white_keys_info);
     piano.white_auto_fill_keys(white_keys_info);
     debug_print(white_keys_info , "win1");
     debug_print(black_keys_info , "win2");
     debug_print_both(white_keys_info , black_keys_info , "win3");
 
-    while(1) { if(waitKey(0) == 27) break; }
+    std::cout << "initializing the agent...\n";
+    if(hand_detection::initialize_agent("videotest5.mp4") == false) {
+        std::cout << "initializing failed!\n";
+        return -1;
+    }
+    hand_detection::execute_agent();
+    while(1) {
+        Mat frame;
+        hands_info_t hands_info;
+        if(!hand_detection::fetch_hand_data(frame , hands_info)) continue;
+        
+        if(hands_info.left_hand_visible) {
+            for(int i = 0; i < 21; i++) {
+                circle(frame , Point(hands_info.left_hand_landmarks_xlist[i] , hands_info.left_hand_landmarks_ylist[i]) , 2 , Scalar(0x00 , 0xff , 0x00));
+            }
+        }
+        if(hands_info.right_hand_visible) {
+            for(int i = 0; i < 21; i++) {
+                circle(frame , Point(hands_info.right_hand_landmarks_xlist[i] , hands_info.right_hand_landmarks_ylist[i]) , 2 , Scalar(0xff , 0x0 , 0x00));
+            }
+        }
+        imshow("ai" , frame);
+        if(waitKey(10) == 27) break;
+    }
 
+    hand_detection::end();
     return 0;
+}
+
+void frame_filter_func(Mat &frame) {
+    
 }
 
 void debug_print(struct piano_keys_info &keys_info , const char *win) {
