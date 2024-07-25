@@ -33,6 +33,11 @@
 #define PIANO_KEY_Bflat  11
 #define PIANO_KEY_B      12
 
+#define PIANO_KEY_TYPE_LEFT   1
+#define PIANO_KEY_TYPE_MIDDLE 2
+#define PIANO_KEY_TYPE_RIGHT  3
+#define PIANO_KEY_TYPE_NONE   4
+
 struct piano_keys_info {
     cv::Mat piano_image;
 
@@ -71,6 +76,8 @@ void image_detection(cv::Mat img , std::vector<cv::KeyPoint>&keypoints);
 void get_bounding_rect_contour(const std::vector<cv::Point>&contour , std::vector<cv::Point>&bounding_rect);
 void rotated_rect_to_contour(const cv::RotatedRect &rect , std::vector<cv::Point>&contour);
 
+typedef void(*filter_func_t)(cv::Mat &filter);
+
 class PianoRecognition {
     public:
         PianoRecognition(const char *default_video , int m , int w , int h , int f) { set_video_input(default_video , m , w , h , f); }
@@ -81,6 +88,10 @@ class PianoRecognition {
         PianoRecognition(const char *default_video , cv::Mat template_piano) : video_input({0 , 0 , 0 , 0}) {
             set_template_piano_image(template_piano); 
             is_piano_detected = false;
+        }
+
+        void set_frame_filter(filter_func_t filter) {
+            filter_function = filter;
         }
         
         // major processes
@@ -145,6 +156,8 @@ class PianoRecognition {
         cv::Mat template_piano;
         std::vector<cv::KeyPoint>template_keypoints;
         cv::Mat template_descriptors;
+
+        filter_func_t filter_function;
 };
 
 #endif
