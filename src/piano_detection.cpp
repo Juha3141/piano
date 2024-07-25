@@ -58,7 +58,7 @@ bool PianoRecognition::process_piano_calibration(void) {
     Rect prev_bounding_rect;
 
     int overlap_streak = 0;
-    const int overlap_streak_threshold = 100;
+    const int overlap_streak_threshold = 80;
     
     Mat debug_copy;
     while(1) {
@@ -67,7 +67,7 @@ bool PianoRecognition::process_piano_calibration(void) {
             std::cout << "video error!\n";
             return false;
         }
-
+        this->filter_function(frame);
         int width = 800;
         std::cout << "resized : " << Size(width , ((float)frame.size().height*((float)width/(float)frame.size().width))) << "\n";
         resize(frame , frame , Size(width , ((float)frame.size().height*((float)width/(float)frame.size().width))));
@@ -112,6 +112,7 @@ bool PianoRecognition::process_piano_calibration(void) {
         std::copy(contour.begin() , contour.end() , std::back_inserter(prev_contour));
         memcpy(&prev_bounding_rect , &bounding_rect , sizeof(Rect));
     }
+    video.release();
     return true;
 }
 
@@ -130,7 +131,7 @@ bool PianoRecognition::recognize_piano(Mat img , std::vector<Point>&contour) {
     matcher->knnMatch(descriptors_query , template_descriptors , knn_matches , 2);
 
     // only select the good matches
-    const float match_thresh_ratio = 0.85;
+    const float match_thresh_ratio = 0.79;
     for(int i = 0; i < knn_matches.size(); i++) {
         if(knn_matches[i][0].distance < match_thresh_ratio*knn_matches[i][1].distance) {
             good_matches.push_back(knn_matches[i][0]);
@@ -196,7 +197,12 @@ void PianoRecognition::write_keys_info(struct piano_keys_info &keys_info) {
     std::vector<Point>center_points;
     for(RotatedRect r : keys_info.keys_rectangle_list) { center_points.push_back(r.center); }
 
+    std::cout << "Calculating the best fit line...\n";
     // calculate the best fits of the center masses
+    if(center_points.size() == 0) {
+        std::cout << "calculation failed! recalibration required..\n";
+        return;
+    }
     Vec4f best_fit_line;
     fitLine(center_points , best_fit_line , DIST_L2 , 0 , 0.01 , 0.01);
     double bestfit_vx = best_fit_line[0] , bestfit_vy = best_fit_line[1] , bestfit_x0 = best_fit_line[2] , bestfit_y0 = best_fit_line[3];
@@ -209,6 +215,7 @@ void PianoRecognition::write_keys_info(struct piano_keys_info &keys_info) {
 
     std::vector<double>dist_median_list;
 
+    std::cout << "Calculating the distance between the line...\n";
     keys_info.cm_bestfit_b = bestfit_b;
     keys_info.cm_bestfit_a = bestfit_a;
     for(int i = 0; i < keys_info.keys_rectangle_list.size(); i++) {
@@ -284,7 +291,7 @@ void PianoRecognition::white_auto_fill_keys(struct piano_keys_info &keys_info) {
             // The rectangle does not cover the entirety of the key, so we inflate the width a little bit.
             // The value "1.3" is acquired from the empirical experience.
 
-            int missing_key_count = round(keys_info.dist_between_keys_list[i]/(keys_info.keys_rectangle_list[i].size.width*1.3))-1;
+            int missing_key_count = round(keys_info.dist_between_keys_list[i]/(keys_info.keys_rectangle_list[i].size.width*2.0))-1;
             std::cout << "missing keys found!" << "\n";
             std::cout << "missing keys count : " << missing_key_count << "\n";
 
@@ -569,5 +576,7 @@ void PianoRecognition::detect_black_keys(Mat piano_image , struct piano_keys_inf
 
 
 void PianoRecognition::recognize_notes(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info) {
-
+    for(int i = 0; i < white_keys_info.keys_rectangle_list.size(); i++) {
+        
+    }
 }
