@@ -2,3 +2,4 @@ piano
 *.obj
 *.code-workspace
 videotest*
+.vscode/
