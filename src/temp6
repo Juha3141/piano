@@ -1,0 +1,98 @@
+
+    int key_type_list_size = sizeof(key_type_list)/sizeof(int);
+
+    // first : note , second : actual index(from key_type_list_notes)
+    white_keys_info.key_notes.resize(white_keys_info.keys_rectangle_list.size());
+    for(int i = 0; i < white_keys_info.key_notes.size(); i++) {
+        white_keys_info.key_notes[i].first = 0;
+        white_keys_info.key_notes[i].second = 0;
+    }
+    int current_offset = 0;// = (int)(white_keys_info.keys_rectangle_list[0].center.x/(white_keys_info.median_key_width*2));
+    std::cout << "current offset : " << current_offset << "\n";
+    std::cout << "adjusted off   : " << (int)(white_keys_info.keys_rectangle_list[0].center.x/(white_keys_info.median_key_width*1.3)) << "\n";
+    for(std::vector<std::pair<RotatedRect , int>>*vect : white_keys_info.separated_keys_rectangle_list) {
+        std::cout << "vect->size() : " << vect->size() << "\n";
+
+        // if all the keys are present, treat it differently
+        if(vect->size() == 52) { 
+            for(int i = 0; i < vect->size(); i++) {
+                white_keys_info.key_notes[(*vect)[i].second].first = key_type_list_notes[i];
+                white_keys_info.key_notes[(*vect)[i].second].second = i;
+            }
+            continue;
+        }
+        int missing_keys_count = 0;
+        int missing_index = (*vect)[0].second-1;
+        int missing_piano_index = current_offset-1;
+        for(; current_offset < key_type_list_size; current_offset++) {
+            int match = 0;
+            int error_count = 0;
+            
+            // match
+            for(int i = current_offset; i < current_offset+vect->size(); i++) {
+                if(white_key_type_list[(*vect)[i-current_offset].second] == key_type_list[i]) {
+                    match++;
+                }
+                for(int e : error_index_list) {
+                    if((*vect)[i-current_offset].second == e) {
+                        error_count++;
+                    }
+                }
+            }
+            std::cout << "current_offset : " << current_offset << " , match : " << match << "\n";
+            if(match == vect->size()-error_count) {
+                std::cout << "current_offset : " << current_offset << "\n";
+                for(int i = 0; i < vect->size(); i++) {
+                    white_keys_info.key_notes[(*vect)[i].second].first = key_type_list_notes[current_offset+i];
+                    white_keys_info.key_notes[(*vect)[i].second].second = current_offset+i;
+                }
+                current_offset += vect->size();
+                break;
+            }
+            missing_keys_count++;
+        }
+
+        if(missing_keys_count != 0 && missing_index >= 0) {
+            std::cout << "missing_keys : " << missing_keys_count << ", location : " << missing_index << "\n";
+            white_keys_info.missing_keys.push_back(std::tuple<int , int , int>(missing_index , missing_piano_index , missing_keys_count));
+        }
+    }
+    for(std::vector<std::pair<RotatedRect , int>>*vect : white_keys_info.separated_keys_rectangle_list) {
+        std::cout << "----- consecutive part -----\n";
+        for(int i = 0; i < vect->size(); i++) {
+            char note[10];
+            switch(white_keys_info.key_notes[(*vect)[i].second].first) {
+                case PIANO_KEY_C: strcpy(note , "C"); break;
+                case PIANO_KEY_D: strcpy(note , "D"); break;
+                case PIANO_KEY_E: strcpy(note , "E"); break;
+                case PIANO_KEY_F: strcpy(note , "F"); break;
+                case PIANO_KEY_G: strcpy(note , "G"); break;
+                case PIANO_KEY_A: strcpy(note , "A"); break;
+                case PIANO_KEY_B: strcpy(note , "B"); break;
+            }
+            std::cout << "#" << (*vect)[i].second << "(" << white_keys_info.key_notes[(*vect)[i].second].second << ") : " << note << "\n";
+        }
+    }
+    
+#ifdef DEBUG
+    Mat test_img = Mat::zeros(white_keys_info.piano_image.size() , CV_8UC3);
+    for(int i = 0; i < white_keys_info.keys_rectangle_list.size(); i++) {
+        std::vector<Point>rect_contour;
+        rotated_rect_to_contour(white_keys_info.keys_rectangle_list[i] , rect_contour);
+        drawContours(test_img , std::vector<std::vector<Point>>({rect_contour}) , -1 , Scalar(0xff , 0x00 , 0x00) , 1);
+        putText(test_img , std::to_string(i) , white_keys_info.keys_rectangle_list[i].center , FONT_HERSHEY_SIMPLEX , 0.4 , Scalar(0xff , 0xff , 0xff) , 1);
+        char note[10];
+        switch(white_keys_info.key_notes[i].first) {
+            case PIANO_KEY_C: strcpy(note , "C"); break;
+            case PIANO_KEY_D: strcpy(note , "D"); break;
+            case PIANO_KEY_E: strcpy(note , "E"); break;
+            case PIANO_KEY_F: strcpy(note , "F"); break;
+            case PIANO_KEY_G: strcpy(note , "G"); break;
+            case PIANO_KEY_A: strcpy(note , "A"); break;
+            case PIANO_KEY_B: strcpy(note , "B"); break;
+        }
+        putText(test_img , note , Point(white_keys_info.keys_rectangle_list[i].center.x , white_keys_info.keys_rectangle_list[i].center.y+20) , FONT_HERSHEY_SIMPLEX , 0.4 , Scalar(0xff , 0xff , 0xff) , 1);
+        
+    }
+    imshow("test1" , test_img);
+#endif

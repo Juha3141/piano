@@ -1,0 +1,57 @@
+   /*
+        std::vector<Point2f>pts;
+        black_keys_info.keys_rectangle_list[i].points(pts);
+        int current_x = (pts[2].x+pts[3].x)/2;
+        int current_y = (pts[2].y+pts[3].y)/2;
+
+        std::vector<Point2f>dest_pts;
+        black_keys_info.keys_rectangle_list[i+1].points(dest_pts);
+        int destination_x = (dest_pts[2].x+dest_pts[3].x)/2;
+        int destination_y = (dest_pts[2].y+dest_pts[3].y)/2;
+        
+        int keys_count = 0;
+        std::cout << "current_x     : " << current_x << "\n";
+        std::cout << "destination_x : " << destination_x << "\n";
+
+#ifdef DEBUG
+        std::vector<Point>brr_c;
+        Scalar color = Scalar(rng.uniform(0 , 180) , rng.uniform(0 , 180) , rng.uniform(0 , 180));
+        rotated_rect_to_contour(black_keys_info.keys_rectangle_list[i] , brr_c);
+        drawContours(image , std::vector<std::vector<Point>>({brr_c}) , -1 , color , 1);
+        circle(image , Point(current_x , current_y) , 2 , color , -1);
+        circle(image , Point(destination_x , destination_y) , 2 , color , -1);
+#endif
+        while(1) {
+            bool pointpolygon_success = false;
+            int current_width = white_keys_info.median_key_width;
+            for(int j = 0; j < white_keys_info.keys_rectangle_list.size(); j++) {
+                std::vector<Point>contour;
+                rotated_rect_to_contour(white_keys_info.keys_rectangle_list[j] , contour);
+                if(pointPolygonTest(contour , Point2f(current_x , current_y) , false) > 0) {
+                    current_width = (white_keys_info.keys_rectangle_list[j].size.width)*cos(white_keys_info.keys_rectangle_list[j].angle*M_PI/180.0f);
+                    std::cout << "   found(" << j << "), new_width = " << current_width << "\n";
+                    current_x = white_keys_info.keys_rectangle_list[j].center.x;
+                    drawContours(image , std::vector<std::vector<Point>>({contour}) , -1 , color , 1);
+                    pointpolygon_success = true;
+                    break;
+                }
+            }
+            Point p(current_x , current_y);
+            circle(image , p , 2 , color , -1);
+            current_x += current_width;
+            std::cout << "(inc) x : " << current_x << "\n";
+            if(current_x >= destination_x) {
+                break;
+            }
+            keys_count++;
+            
+        }
+        std::cout << "#" << i << " : " << keys_count << "\n";
+        if(keys_count == black_key_distance_list[i]) {
+            std::cout << "match!\n";
+        }
+        else {
+            std::cout << "not match!\n";
+
+        }
+        */
