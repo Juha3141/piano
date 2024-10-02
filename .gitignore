@@ -3,3 +3,4 @@ piano
 *.code-workspace
 videotest*
 .vscode/
+.gdb_history
