@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <vector>
 #include <algorithm>
+#include <numeric>
 #include <iterator>
 #include <string>
 
@@ -43,14 +44,16 @@ struct piano_keys_info {
 
     // List of RotatedRects of the keys
     std::vector<cv::RotatedRect>keys_rectangle_list;
+    std::vector<std::vector<std::pair<cv::RotatedRect , int>>*>separated_keys_rectangle_list;
 
     // mean width, height, area of the keys
     double mean_key_width;
     double mean_key_height;
-    double mean_key_area;
-    double max_key_height;
     double median_key_width;
     double median_key_height;
+    
+    double mean_key_y;
+    double std_dev_key_y;
 
     // Best fit line of center of masses of keys
     // Best fit line : y=bx+a
@@ -64,9 +67,18 @@ struct piano_keys_info {
     double mean_dist_between_keys;
     double median_dist_between_keys;
 
-    // List of the key notes
-    std::vector<int>keys_notes;
+    // first : note of the key , second : 0-52 index of the note
+    std::vector<std::pair<int , int>>key_notes;
+
+/* for white keys */
+
+    // List of the key notes and shapes
+    // shape of the white key
+    std::vector<int>white_key_shapes;
 };
+
+#define NOTE(n)   ((n) & 0x0f)
+#define OCTAVE(n) ((n) >> 4)
 
 void get_min_max_x_point(std::vector<cv::Point> &cont_obj , cv::Point &min_x , cv::Point &max_x);
 void get_min_max_y_point(std::vector<cv::Point> &cont_obj , cv::Point &min_y , cv::Point &max_y);
@@ -75,6 +87,11 @@ void create_features_info(cv::Mat img , std::vector<cv::KeyPoint>&keypoints , cv
 void image_detection(cv::Mat img , std::vector<cv::KeyPoint>&keypoints);
 void get_bounding_rect_contour(const std::vector<cv::Point>&contour , std::vector<cv::Point>&bounding_rect);
 void rotated_rect_to_contour(const cv::RotatedRect &rect , std::vector<cv::Point>&contour);
+void relocate_rotated_rect_list(std::vector<cv::RotatedRect>&rect_list , int x , int y);
+double calculate_median(std::vector<double>&data_list);
+double calculate_standard_deviation(std::vector<double>&data_list , double mean);
+
+double euclidean_distance(cv::Point p1 , cv::Point p2);
 
 typedef void(*filter_func_t)(cv::Mat &filter);
 
@@ -98,13 +115,28 @@ class PianoRecognition {
         bool process_piano_calibration(void);
 
         bool recognize_piano(cv::Mat img , std::vector<cv::Point>&contour);
-        void recognize_notes(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info);
         
-        void detect_white_keys(cv::Mat piano_image , struct piano_keys_info &keys_info);
+        // black keys are more easy to recognize --> Recognize black keys fist and recogniz]e the white key
         void detect_black_keys(cv::Mat piano_image , struct piano_keys_info &keys_info);
-        void remove_outliers(struct piano_keys_info &keys_info);
+        void detect_white_keys(cv::Mat piano_image , struct piano_keys_info &keys_info , const struct piano_keys_info &black_keys_info);
+        void adjust_white_outliers(struct piano_keys_info &white_keys_info);
+        void adjust_black_outliers(struct piano_keys_info &black_keys_info);
         void write_keys_info(struct piano_keys_info &keys_info);
-        void white_auto_fill_keys(struct piano_keys_info &keys_info);
+
+        void detect_missing_white_keys(struct piano_keys_info &keys_info);
+        void detect_missing_black_keys(struct piano_keys_info &black_keys_info , struct piano_keys_info &white_keys_info);
+        void detect_white_key_shapes(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info);
+        void detect_white_key_notes(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info);
+        void detect_black_key_notes(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info);
+
+        void doublecheck_white_keys(struct piano_keys_info &white_keys_info);
+        void doublecheck_black_keys(struct piano_keys_info &black_keys_info);
+
+        void fill_missing_white_keys(struct piano_keys_info &white_keys_info);
+
+        // deprecated
+        // void fill_missing_white_keys(struct piano_keys_info &white_keys_info);
+        void separate_piano_sections(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info);
 
         inline void set_template_piano_image(cv::Mat template_piano) {
             this->template_piano = template_piano;
@@ -138,6 +170,7 @@ class PianoRecognition {
 
         bool is_piano_detected = false;
 
+        int piano_loc_x , piano_loc_y;
         // the raw, unprocessed frame that contains the image of piano
         cv::Mat piano_bounding_rect_img;
         // the bounding contour 
@@ -159,5 +192,7 @@ class PianoRecognition {
 
         filter_func_t filter_function;
 };
+
+const char *number_to_note_string(int note_number);
 
 #endif
