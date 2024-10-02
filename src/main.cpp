@@ -10,7 +10,8 @@ void debug_print(struct piano_keys_info &keys_info , const char *win);
 void debug_print_both(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info , const char *win);
 void debug_print_notes(struct piano_keys_info &white_keys_info , const char *win);
 
-void frame_filter_func(Mat &frame);
+// not implemented yet
+void frame_filter_func(Mat &frame) {}
 
 int main(int argc , char **argv) {
     bool is_video = false;
@@ -97,13 +98,16 @@ else {
     piano.write_keys_info(black_keys_info);
     piano.write_keys_info(white_keys_info);
 
-    std::cout << "adjusting outliers... \n";
-    piano.adjust_white_outliers(white_keys_info);
-    piano.adjust_black_outliers(black_keys_info);
+    std::cout << "adjusting white outliers... \n";
+    piano.adjust_key_angles(white_keys_info);
+    piano.remove_key_outliers(white_keys_info);
+    std::cout << "adjusting black outliers... \n";
+    piano.adjust_key_angles(black_keys_info);
+    piano.remove_key_outliers(black_keys_info);
     std::cout << "detecting missing black keys... \n";
     piano.detect_missing_black_keys(black_keys_info , white_keys_info);
-    debug_print(black_keys_info , "win2");
-    debug_print_both(white_keys_info , black_keys_info , "win3");
+    debug_print(white_keys_info , "white_keys_bestfit_line");
+    debug_print_both(white_keys_info , black_keys_info , "white_black_both");
 /*
     std::cout << "detecting missing white keys... \n";
     piano.detect_missing_white_keys(white_keys_info);
@@ -119,11 +123,10 @@ else {
     piano.detect_black_key_notes(white_keys_info , black_keys_info);
     piano.doublecheck_black_keys(black_keys_info);
     debug_print_both(white_keys_info , black_keys_info , "win3");
-    debug_print_notes(white_keys_info , "win4");*/
-
+    debug_print_notes(white_keys_info , "win4");
     // debug_print(white_keys_info , "win1");
     // debug_print(black_keys_info , "win2");
-    debug_print_both(white_keys_info , black_keys_info , "win3");
+*/
 
     std::cout << "white keys count : " << white_keys_info.keys_rectangle_list.size() << "\n";
     std::cout << "black keys count : " << black_keys_info.keys_rectangle_list.size() << "\n";
@@ -227,10 +230,6 @@ else {
     std::cout << "killing the child process... \n";
     hand_detection::end();
     return 0;
-}
-
-void frame_filter_func(Mat &frame) {
-    
 }
 
 void debug_print(struct piano_keys_info &keys_info , const char *win) {
