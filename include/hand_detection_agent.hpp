@@ -3,9 +3,11 @@
 
 #include <iostream>
 #include <cstdlib>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/shm.h>
-#include <pthread.h>
+#include <sys/stat.h>
+#include <signal.h>
 
 #include <opencv2/opencv.hpp>
 
@@ -32,9 +34,7 @@ struct GlobalHandDetectionSystem {
     }
     char video_device[64];
 
-    pthread_t agent_thread;
-    int agent_thread_id;
-    bool thread_running = false;
+    pid_t agent_process_id;
 
     int screen_width;
     int screen_height;
@@ -51,6 +51,7 @@ namespace hand_detection {
     bool initialize_agent(const char *video_device);
     void execute_agent(void);
     bool fetch_hand_data(cv::Mat &current_frame , hands_info_t &hands);
+    bool check_agent_running(void);
 
     void end(void);
 }
