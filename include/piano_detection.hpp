@@ -44,6 +44,7 @@ struct piano_keys_info {
 
     // List of RotatedRects of the keys
     std::vector<cv::RotatedRect>keys_rectangle_list;
+    std::vector<cv::Point>keys_rectangle_pivot;
     std::vector<std::vector<std::pair<cv::RotatedRect , int>>*>separated_keys_rectangle_list;
 
     // mean width, height, area of the keys
@@ -116,11 +117,12 @@ class PianoRecognition {
 
         bool recognize_piano(cv::Mat img , std::vector<cv::Point>&contour);
         
-        // black keys are more easy to recognize --> Recognize black keys fist and recogniz]e the white key
+        // black keys are more easy to recognize --> Recognize black keys fist and recognize the white key
         void detect_black_keys(cv::Mat piano_image , struct piano_keys_info &keys_info);
         void detect_white_keys(cv::Mat piano_image , struct piano_keys_info &keys_info , const struct piano_keys_info &black_keys_info);
-        void adjust_white_outliers(struct piano_keys_info &white_keys_info);
-        void adjust_black_outliers(struct piano_keys_info &black_keys_info);
+        
+        void adjust_key_angles(struct piano_keys_info &keys_info);
+        void remove_key_outliers(struct piano_keys_info &keys_info);
         void write_keys_info(struct piano_keys_info &keys_info);
 
         void detect_missing_white_keys(struct piano_keys_info &keys_info);
