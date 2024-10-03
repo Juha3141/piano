@@ -222,6 +222,90 @@ bool PianoRecognition::recognize_piano(Mat img , std::vector<Point>&contour) {
 
 #define DEBUG
 
+static void write_pivot_info(struct piano_keys_info &keys_info) {
+    // if flipped, the pivot should be the higher point on the rectangle
+    // if not flipped, the pivot should be the lower point on the rectangle
+    
+#ifdef DEBUG
+    Mat pivot_image;
+    cvtColor(keys_info.piano_image , pivot_image , COLOR_GRAY2BGR);
+#endif
+    std::cout << "flipped : " << keys_info.flipped << "\n";
+    for(int i = 0; i < keys_info.keys_rectangle_list.size(); i++) {
+        std::vector<Point2f>pts;
+        keys_info.keys_rectangle_list[i].points(pts);
+        // 0,1 <--> 2,3
+        // 1,2 <--> 3,0
+        Point p1,p2;
+        Point alternative_p1,alternative_p2;
+        // shorter one is the width
+        Point width_p1,width_p2; // pair 1
+        Point width_p3,width_p4; // pair 2
+        if(euclidean_distance(pts[0] , pts[1]) < euclidean_distance(pts[1] , pts[2])) {
+            width_p1 = pts[0]; width_p2 = pts[1];
+            width_p3 = pts[2]; width_p4 = pts[3];
+        }
+        else {
+            width_p1 = pts[1]; width_p2 = pts[2];
+            width_p3 = pts[3]; width_p4 = pts[0];
+        }
+
+        // compare which points are more farther 
+        int avg_y_1 = (width_p1.y+width_p2.y)/2 , avg_y_2 = (width_p3.y+width_p4.y)/2;
+        if(keys_info.flipped) {
+            if(avg_y_1 < avg_y_2) { p1 = width_p1; p2 = width_p2; alternative_p1 = width_p3; alternative_p2 = width_p4; }
+            else { p1 = width_p3; p2 = width_p4; alternative_p1 = width_p1; alternative_p2 = width_p2; }
+        }
+        else {
+            if(avg_y_1 < avg_y_2) { p1 = width_p3; p2 = width_p4; alternative_p1 = width_p1; alternative_p2 = width_p2; }
+            else { p1 = width_p1; p2 = width_p2; alternative_p1 = width_p3; alternative_p2 = width_p4; }
+        }
+        bool overlap = false;
+        for(int j = 0; j < keys_info.keys_rectangle_list.size(); j++) {
+            if(j == i) continue;
+            std::vector<Point>contour;
+            rotated_rect_to_contour(keys_info.keys_rectangle_list[j] , contour);
+            if(pointPolygonTest(contour , p1 , false) > 0||pointPolygonTest(contour , p2 , false) > 0) {
+                overlap = true;
+                break;
+            }
+        }
+
+        if(overlap) {
+            std::swap(p1 , alternative_p1);
+            std::swap(p2 , alternative_p2);
+        }
+        // calculate the pivot from the two points
+        Point midpoint((p1.x+p2.x)/2 , (p1.y+p2.y)/2);
+        Point midpoint_a((alternative_p1.x+alternative_p2.x)/2 , (alternative_p1.y+alternative_p2.y)/2);
+        int width = keys_info.keys_rectangle_list[i].size.width;
+        double dist = euclidean_distance(midpoint , midpoint_a);
+        double m = (double)width/2.0f , n = dist-((double)width/2.0f);
+        
+        Point pivot(((m*midpoint_a.x+n*midpoint.x)/(m+n)) , ((m*midpoint_a.y+n*midpoint.y)/(m+n)));
+        
+        std::cout << "midpoint   : (" << midpoint.x << "," << midpoint.y << ")\n";
+        std::cout << "midpoint_a : (" << midpoint_a.x << "," << midpoint_a.y << ")\n";
+        std::cout << width << " : " << dist-width << "\n";
+        keys_info.keys_rectangle_pivot.push_back(pivot);
+#ifdef DEBUG
+        std::vector<Point>dc;
+        rotated_rect_to_contour(keys_info.keys_rectangle_list[i] , dc);
+        drawContours(pivot_image , std::vector<std::vector<Point>>({dc}) , -1 , Scalar(0x00 , 0x00 , 0xff) , 1);
+        
+        circle(pivot_image , p1 , 2 , Scalar(0x00 , 0xff , 0x00) , -1);
+        circle(pivot_image , p2 , 2 , Scalar(0x00 , 0xff , 0x00) , -1);
+        circle(pivot_image , midpoint , 2 , Scalar(0x00 , 0xff , 0xff) , -1);
+        circle(pivot_image , pivot , 2 , Scalar(0x00 , 0x00 , 0xff) , -1);
+        circle(pivot_image , midpoint_a , 2 , Scalar(0x00 , 0xff , 0xff) , -1);
+#endif
+    }
+#ifdef DEBUG
+    static int dn = 1;
+    imshow("pivot_info"+std::to_string(dn++) , pivot_image);
+#endif
+}
+
 /// @brief Write the keys info to the structure based on the informations provided
 ///        Necessary information consists: 
 ///         1. keys_info.keys_rectangle_list
@@ -286,6 +370,8 @@ void PianoRecognition::write_keys_info(struct piano_keys_info &keys_info) {
     keys_info.median_dist_between_keys = calculate_median(dist_median_list);
     keys_info.std_dev_key_y = calculate_standard_deviation(y_list , keys_info.mean_key_y);
     std::cout << "mean_dist_between_keys = " << keys_info.mean_dist_between_keys << "\n";
+
+    write_pivot_info(keys_info);
 }
 
 static void remove_item_from_piano_info(struct piano_keys_info &keys_info , int i) {
@@ -356,6 +442,7 @@ void PianoRecognition::adjust_key_angles(struct piano_keys_info &keys_info) {
         std::vector<double>median_list;
         for(RotatedRect rr : rect_divided_by_region[i]) { median_list.push_back(rr.angle); }
         angle_regional_median[i] = calculate_median(median_list);
+        std::cout << "regional_median[" << i << "] : " << angle_regional_median[i] << "\n";
     }
 
     for(int i = 0; i < keys_info.keys_rectangle_list.size(); i++) {
@@ -370,7 +457,7 @@ void PianoRecognition::adjust_key_angles(struct piano_keys_info &keys_info) {
             RotatedRect rr = keys_info.keys_rectangle_list[i];
             
             rr.points(pts);
-            double target_angle = angle_regional_median[(int)(i/region_size)];
+            double target_angle = angle_regional_median[angle_region_indicator[i]];
             double delta_theta = target_angle-rr.angle;
 
             std::cout << "target_angle : " << target_angle << "\n";
@@ -420,24 +507,11 @@ void PianoRecognition::adjust_key_angles(struct piano_keys_info &keys_info) {
 }
 
 void PianoRecognition::remove_key_outliers(struct piano_keys_info &keys_info) {
-    // calculate the regional median
-    std::vector<std::vector<RotatedRect>>rect_divided_by_region;
-    std::vector<int>region_indicator;
-    int region_count = 5;
-    double width_regional_median[region_count];
-    region_divider<RotatedRect>(keys_info.keys_rectangle_list , region_count , rect_divided_by_region , region_indicator);
-    for(int i = 0; i < region_count; i++) {
-        std::vector<double>list;
-        for(RotatedRect rr : rect_divided_by_region[i]) { list.push_back(std::min(rr.size.width , rr.size.height)); }
-        width_regional_median[i] = calculate_percentile(list , 0.50);
-    }
+    double width_median = keys_info.median_key_width;
     for(int i = 0; i < keys_info.keys_rectangle_list.size(); i++) {
-        int region_index = region_indicator[i];
-        double median = width_regional_median[region_index];
-        
-        if(keys_info.keys_rectangle_list[i].size.width < 0.8*median||keys_info.keys_rectangle_list[i].size.width > 1.8*median) {
+        if(keys_info.keys_rectangle_list[i].size.width < 0.8*width_median||keys_info.keys_rectangle_list[i].size.width > 1.8*width_median) {
             std::cout << "outlier : " << i << "\n";
-            adjust_rotated_rect_width(keys_info.keys_rectangle_list[i] , median);
+            adjust_rotated_rect_width(keys_info.keys_rectangle_list[i] , width_median);
         }
     }
 }
@@ -597,6 +671,7 @@ void PianoRecognition::detect_white_keys(Mat piano_image , struct piano_keys_inf
     std::cout << "flipped = " << flipped << "\n";
     std::cout << "black_min_y = " << black_min_y << "\n";
     std::cout << "black_max_y = " << black_max_y << "\n";
+    keys_info.flipped = flipped;
 
     copyMakeBorder(piano_image , piano_image_padding , padding , padding , padding , padding , BORDER_CONSTANT , Scalar(0));
 
@@ -776,9 +851,6 @@ void PianoRecognition::detect_white_keys(Mat piano_image , struct piano_keys_inf
         closest_black.points(black_points);
         keys_rect_list_2[i].points(white_points);
 
-        // save the pivot of the rectangle
-        keys_info.keys_rectangle_pivot.push_back(Point(keys_rect_list_2[i].center.x-padding , keys_rect_list_2[i].center.y-padding));
-        
         // adjust the height of the key
         Point2f black_p = (black_points[1].y < black_points[2].y) ? black_points[1] : black_points[2];
         Point2f white_p = (white_points[0].y > white_points[3].y) ? white_points[0] : white_points[3];

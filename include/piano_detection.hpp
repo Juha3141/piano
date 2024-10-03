@@ -41,6 +41,9 @@
 
 struct piano_keys_info {
     cv::Mat piano_image;
+    // false : black keys upper than white keys
+    // true  : black keys lower than white keys
+    bool flipped;
 
     // List of RotatedRects of the keys
     std::vector<cv::RotatedRect>keys_rectangle_list;
