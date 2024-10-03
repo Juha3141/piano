@@ -7,6 +7,7 @@
 using namespace cv;
 
 void debug_print(struct piano_keys_info &keys_info , const char *win);
+void debug_print_colorful(struct piano_keys_info &keys_info , const char *win);
 void debug_print_both(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info , const char *win);
 void debug_print_notes(struct piano_keys_info &white_keys_info , const char *win);
 
@@ -104,10 +105,13 @@ else {
     std::cout << "adjusting black outliers... \n";
     piano.adjust_key_angles(black_keys_info);
     piano.remove_key_outliers(black_keys_info);
+    debug_print_colorful(white_keys_info , "white_final");
+    /*
     std::cout << "detecting missing black keys... \n";
     piano.detect_missing_black_keys(black_keys_info , white_keys_info);
     debug_print(white_keys_info , "white_keys_bestfit_line");
     debug_print_both(white_keys_info , black_keys_info , "white_black_both");
+    */
 /*
     std::cout << "detecting missing white keys... \n";
     piano.detect_missing_white_keys(white_keys_info);
@@ -249,6 +253,26 @@ void debug_print(struct piano_keys_info &keys_info , const char *win) {
         if(i < keys_info.keys_rectangle_list.size()-1) {
             line(only_piano_copy , keys_info.keys_rectangle_list[i].center , keys_info.keys_rectangle_list[i+1].center , Scalar(0x00 , 0xff , 0x00) , 1);
         }
+    }
+    imshow(win , only_piano_copy);
+}
+
+void debug_print_colorful(struct piano_keys_info &keys_info , const char *win) {
+    Mat only_piano_copy;
+    cvtColor(keys_info.piano_image , only_piano_copy , COLOR_GRAY2BGR);
+    // draw the best fit line
+    for(double x = 0; x < only_piano_copy.size().width; x += 1) {
+        Point point(x , (keys_info.cm_bestfit_b*x)+keys_info.cm_bestfit_a);
+        circle(only_piano_copy , point , 2 , Scalar(0xff , 0x00 , 0x00) , 1);
+    }
+    RNG rng((unsigned int)time(0));
+    for(int i = 0; i < keys_info.keys_rectangle_list.size(); i++) {
+        std::vector<Point>rectangle_contour;
+        Scalar color = Scalar(rng.uniform(0 , 255) , rng.uniform(0 , 255) , rng.uniform(0 , 255));
+        rotated_rect_to_contour(keys_info.keys_rectangle_list[i] , rectangle_contour);
+
+        drawContours(only_piano_copy , std::vector<std::vector<Point>>({rectangle_contour}) , -1 , color , 2);
+        circle(only_piano_copy , keys_info.keys_rectangle_list[i].center , 2 , Scalar(0xff , 0x00 , 0x00) , 1);
     }
     imshow(win , only_piano_copy);
 }
