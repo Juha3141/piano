@@ -261,11 +261,14 @@ static void write_pivot_info(struct piano_keys_info &keys_info) {
             else { p1 = width_p1; p2 = width_p2; alternative_p1 = width_p3; alternative_p2 = width_p4; }
         }
         bool overlap = false;
+        Point midpoint((p1.x+p2.x)/2 , (p1.y+p2.y)/2);
         for(int j = 0; j < keys_info.keys_rectangle_list.size(); j++) {
             if(j == i) continue;
             std::vector<Point>contour;
-            rotated_rect_to_contour(keys_info.keys_rectangle_list[j] , contour);
-            if(pointPolygonTest(contour , p1 , false) > 0||pointPolygonTest(contour , p2 , false) > 0) {
+            RotatedRect rr = keys_info.keys_rectangle_list[j];
+            rr.size.width *= 1.25; // slightly inflate the width of rectangle
+            rotated_rect_to_contour(rr , contour);
+            if(pointPolygonTest(contour , midpoint , false) > 0) {
                 overlap = true;
                 break;
             }
@@ -275,13 +278,15 @@ static void write_pivot_info(struct piano_keys_info &keys_info) {
             std::swap(p1 , alternative_p1);
             std::swap(p2 , alternative_p2);
         }
-        // calculate the pivot from the two points
-        Point midpoint((p1.x+p2.x)/2 , (p1.y+p2.y)/2);
+        // redeclare the midpoint
+        midpoint = Point((p1.x+p2.x)/2 , (p1.y+p2.y)/2);
         Point midpoint_a((alternative_p1.x+alternative_p2.x)/2 , (alternative_p1.y+alternative_p2.y)/2);
+        // calculate the pivot from the two points
         int width = keys_info.keys_rectangle_list[i].size.width;
         double dist = euclidean_distance(midpoint , midpoint_a);
         double m = (double)width/2.0f , n = dist-((double)width/2.0f);
         
+        // use internal division to calculate the coordinate of the pivot
         Point pivot(((m*midpoint_a.x+n*midpoint.x)/(m+n)) , ((m*midpoint_a.y+n*midpoint.y)/(m+n)));
         
         std::cout << "midpoint   : (" << midpoint.x << "," << midpoint.y << ")\n";
@@ -426,9 +431,6 @@ void PianoRecognition::adjust_key_angles(struct piano_keys_info &keys_info) {
 
     double Q1 = calculate_percentile(rect_angle_list , 0.25);
     double Q3 = calculate_percentile(rect_angle_list , 0.75);
-    std::cout << "Q1 : " << Q1 << "\n";
-    std::cout << "Q3 : " << Q3 << "\n";
-
     double left_whisker = Q1-1.5*(Q3-Q1);
     double right_whisker = Q3+1.5*(Q3-Q1);
 
@@ -441,8 +443,9 @@ void PianoRecognition::adjust_key_angles(struct piano_keys_info &keys_info) {
     for(int i = 0; i < region_size; i++) {
         std::vector<double>median_list;
         for(RotatedRect rr : rect_divided_by_region[i]) { median_list.push_back(rr.angle); }
-        angle_regional_median[i] = calculate_median(median_list);
-        std::cout << "regional_median[" << i << "] : " << angle_regional_median[i] << "\n";
+        if(median_list.size() != 0) {
+            angle_regional_median[i] = calculate_median(median_list);
+        }
     }
 
     for(int i = 0; i < keys_info.keys_rectangle_list.size(); i++) {
@@ -460,11 +463,6 @@ void PianoRecognition::adjust_key_angles(struct piano_keys_info &keys_info) {
             double target_angle = angle_regional_median[angle_region_indicator[i]];
             double delta_theta = target_angle-rr.angle;
 
-            std::cout << "target_angle : " << target_angle << "\n";
-            std::cout << "angle        : " << keys_info.keys_rectangle_list[i].angle << "\n";
-            std::cout << "delta_theta : " << delta_theta << "\n";
-            std::cout << "width  : " << rr.size.width << "\n";
-            std::cout << "height : " << rr.size.height << "\n";
             int x0 , y0;
             if(keys_info.keys_rectangle_pivot.size() == 0) {
                 x0 = rr.center.x+(rr.size.height/2)*sin(rr.angle*M_PI/180.0f);
@@ -479,14 +477,11 @@ void PianoRecognition::adjust_key_angles(struct piano_keys_info &keys_info) {
             int rotated_x = (x-x0)*cos(delta_theta*M_PI/180.0f)-(y-y0)*sin(delta_theta*M_PI/180.0f);
             int rotated_y = (x-x0)*sin(delta_theta*M_PI/180.0f)+(y-y0)*cos(delta_theta*M_PI/180.0f);
             rotated_x += x0; rotated_y += y0;
-            std::cout << "(x0 , y0) : (" << x0 << " , " << y0 << ")\n";
             circle(image_copy , Point(x0 , y0) , 1 , Scalar(0x00 , 0x00 , 0xff) , 2);
 
             circle(image_copy , Point(rr.center.x , rr.center.y) , 1 , Scalar(0xff , 0x00 , 0xff) , 2);
             circle(image_copy , Point(rotated_x , rotated_y) , 1 , Scalar(0xff , 0x00 , 0x00) , 2);
 
-            std::cout << "Original : (" << x << "," << y << ")\n";
-            std::cout << "Rotated  : (" << rotated_x << "," << rotated_y << ")\n";
             keys_info.keys_rectangle_list[i].center.x = rotated_x;
             keys_info.keys_rectangle_list[i].center.y = rotated_y;
             
@@ -506,10 +501,10 @@ void PianoRecognition::adjust_key_angles(struct piano_keys_info &keys_info) {
 #endif
 }
 
-void PianoRecognition::remove_key_outliers(struct piano_keys_info &keys_info) {
+void PianoRecognition::adjust_key_widths(struct piano_keys_info &keys_info) {
     double width_median = keys_info.median_key_width;
     for(int i = 0; i < keys_info.keys_rectangle_list.size(); i++) {
-        if(keys_info.keys_rectangle_list[i].size.width < 0.8*width_median||keys_info.keys_rectangle_list[i].size.width > 1.8*width_median) {
+        if(keys_info.keys_rectangle_list[i].size.width > 1.4*width_median) {
             std::cout << "outlier : " << i << "\n";
             adjust_rotated_rect_width(keys_info.keys_rectangle_list[i] , width_median);
         }
@@ -652,28 +647,10 @@ void PianoRecognition::detect_white_keys(Mat piano_image , struct piano_keys_inf
         std::cout << "No black keys found!!\n";
         return;
     }
-    
-    // check whether the image should be flipped
-    bool flipped = false;
-    int black_average_center_y = 0;
-    int black_min_y = 0x7fffffff;
-    int black_max_y = 0;
-    for(RotatedRect rr : black_keys_info.keys_rectangle_list) {
-        Point2f pts[4];
-        rr.points(pts);
-        black_average_center_y += rr.center.y; 
-        std::vector<int>y_vect = {(int)pts[0].y , (int)pts[1].y , (int)pts[2].y , (int)pts[3].y};
-        black_min_y = std::min(black_min_y , *std::min_element(y_vect.begin() , y_vect.end()));
-        black_max_y = std::max(black_max_y , *std::max_element(y_vect.begin() , y_vect.end()));
-    }
-    black_average_center_y /= black_keys_info.keys_rectangle_list.size();
-    if(black_average_center_y >= piano_image.size().height/2) flipped = true;
-    std::cout << "flipped = " << flipped << "\n";
-    std::cout << "black_min_y = " << black_min_y << "\n";
-    std::cout << "black_max_y = " << black_max_y << "\n";
-    keys_info.flipped = flipped;
+    keys_info.flipped = black_keys_info.flipped;
 
     copyMakeBorder(piano_image , piano_image_padding , padding , padding , padding , padding , BORDER_CONSTANT , Scalar(0));
+    morphologyEx(piano_image_padding , piano_image_padding , MORPH_OPEN , getStructuringElement(MORPH_RECT , Size(3 , 3)));
 
     int truncated_height = 0;
     std::vector<Point>truncating_contour , truncating_best_fit_line_points;
@@ -688,7 +665,7 @@ void PianoRecognition::detect_white_keys(Mat piano_image , struct piano_keys_inf
             contour[i].x += padding;
             contour[i].y += padding;
         }
-        if(flipped) { truncating_best_fit_line_points.push_back(contour[1]); truncating_best_fit_line_points.push_back(contour[2]); }
+        if(black_keys_info.flipped) { truncating_best_fit_line_points.push_back(contour[1]); truncating_best_fit_line_points.push_back(contour[2]); }
         else { truncating_best_fit_line_points.push_back(contour[0]); truncating_best_fit_line_points.push_back(contour[3]); }
     }
     fitLine(truncating_best_fit_line_points , black_keys_best_fit_line , DIST_L2 , 0 , 0.01 , 0.01);
@@ -697,13 +674,13 @@ void PianoRecognition::detect_white_keys(Mat piano_image , struct piano_keys_inf
     double bestfit_a = -(bestfit_b*bestfit_x0)+bestfit_y0;
 
     truncating_contour.insert(truncating_contour.begin() , Point(0 , bestfit_a));
-    truncating_contour.insert(truncating_contour.begin()+1 , Point(0 , flipped ? piano_image_padding.size().height : 0));
+    truncating_contour.insert(truncating_contour.begin()+1 , Point(0 , black_keys_info.flipped ? piano_image_padding.size().height : 0));
     
     truncating_contour.insert(truncating_contour.end() , truncating_best_fit_line_points.begin() , truncating_best_fit_line_points.end());
     std::sort(truncating_contour.begin() , truncating_contour.end() , [](const auto &a , const auto &b) { return (a.x < b.x); });
 
     truncating_contour.push_back(Point(piano_image_padding.size().width , bestfit_b*piano_image_padding.size().width+bestfit_a));
-    truncating_contour.push_back(Point(piano_image_padding.size().width , flipped ? piano_image_padding.size().height : 0));
+    truncating_contour.push_back(Point(piano_image_padding.size().width , black_keys_info.flipped ? piano_image_padding.size().height : 0));
 
     Mat testimg;
     morphologyEx(piano_image , testimg , MORPH_OPEN , getStructuringElement(MORPH_RECT , Size(3 , 3)) , Point(-1 , -1) , 3);
@@ -854,14 +831,14 @@ void PianoRecognition::detect_white_keys(Mat piano_image , struct piano_keys_inf
         // adjust the height of the key
         Point2f black_p = (black_points[1].y < black_points[2].y) ? black_points[1] : black_points[2];
         Point2f white_p = (white_points[0].y > white_points[3].y) ? white_points[0] : white_points[3];
-        if(flipped) {
+        if(black_keys_info.flipped) {
             black_p = (black_points[0].y > black_points[3].y) ? black_points[0] : black_points[3];
             white_p = (white_points[1].y < white_points[2].y) ? white_points[1] : white_points[2];
         }
         white_p.x -= padding;
         white_p.y -= padding;
         double distance = abs(black_p.y-white_p.y);
-        adjust_rotated_rect_height(keys_rect_list_2[i] , distance , !flipped);
+        adjust_rotated_rect_height(keys_rect_list_2[i] , distance , !black_keys_info.flipped);
 
         // inflate the width
         keys_rect_list_2[i].size.width += erode_iteration*2;
@@ -903,10 +880,12 @@ void PianoRecognition::detect_black_keys(Mat piano_image , struct piano_keys_inf
 
     // black key mask
     std::cout << "(detect_black_keys) 1. Performing close operation & thresholding... \n";
+    // remove noises using gaussian blur
+    GaussianBlur(piano_image_padding , piano_image_padding , Size(5 , 5) , 5);
     threshold(piano_image_padding , only_black_keys , -1 , 255 , THRESH_BINARY|THRESH_OTSU);
     // inRange(piano_image_padding , Scalar(0x00 , 0x00 , 0x00) , Scalar(0x33 , 0x33 , 0x33) , only_black_keys);
     // only_black_keys = ~only_black_keys;
-    morphologyEx(only_black_keys , only_black_keys , MORPH_CLOSE , getStructuringElement(MORPH_RECT , Size(2 , 2)));
+    morphologyEx(only_black_keys , only_black_keys , MORPH_OPEN , getStructuringElement(MORPH_RECT , Size(2 , 2)));
     // dilate(only_black_keys , only_black_keys , cv::Mat() , Point(-1 , -1) , 1);
 
     imshow("only_black_keys" , only_black_keys);
@@ -916,10 +895,18 @@ void PianoRecognition::detect_black_keys(Mat piano_image , struct piano_keys_inf
     only_black_keys.copyTo(black_keys_enclosed);
     findContours(only_black_keys , contours , RETR_EXTERNAL , CHAIN_APPROX_SIMPLE);
     std::vector<std::vector<Point>>hull(contours.size());
+
+    // the longest contour is the contour that encloses the piano
+    int i_max_arc_length = 0;
+    int hull_max_arc_length = 0;
     for(int i = 0; i < contours.size(); i++) {
+        int length = arcLength(contours[i] , true);
+        if(hull_max_arc_length < length) {
+            i_max_arc_length = i; hull_max_arc_length = length;
+        }
         convexHull(contours[i] , hull[i]);
-        drawContours(black_keys_enclosed , hull , i , 0xff , 10);
     }
+    drawContours(black_keys_enclosed , hull , i_max_arc_length , 0xff , 10);
     morphologyEx(black_keys_enclosed , black_keys_enclosed , MORPH_CLOSE , getStructuringElement(MORPH_RECT , Size(3 , 3)));
 
     std::vector<std::vector<Point>>black_keys_contours_1 , black_keys_contours;
@@ -982,11 +969,44 @@ void PianoRecognition::detect_black_keys(Mat piano_image , struct piano_keys_inf
         return (a.center.x < b.center.x);
     });
 
+    // check whether the image should be flipped
+    bool flipped = false;
+    std::vector<double>black_cm_y_list;
+    int black_median_cm_y = 0;
+    Mat test_image;
+    cvtColor(piano_image_padding , test_image , COLOR_GRAY2BGR);
+    
+    RotatedRect piano_rotated_rect = minAreaRect(hull[i_max_arc_length]);
+    if(piano_rotated_rect.size.height > piano_rotated_rect.size.width) {
+        std::swap(piano_rotated_rect.size.height , piano_rotated_rect.size.width);
+        piano_rotated_rect.angle -= 90.0f;
+    }
+    RotatedRect piano_rotated_rect_upper(piano_rotated_rect) , piano_rotated_rect_lower(piano_rotated_rect);
+    adjust_rotated_rect_height(piano_rotated_rect_upper , piano_rotated_rect.size.height/2 , false);
+    adjust_rotated_rect_height(piano_rotated_rect_lower , piano_rotated_rect.size.height/2 , true);
+    std::vector<Point>piano_rr_contour_upper , piano_rr_contour_lower;
+    rotated_rect_to_contour(piano_rotated_rect_upper , piano_rr_contour_upper);
+    rotated_rect_to_contour(piano_rotated_rect_lower , piano_rr_contour_lower);
+    
+    drawContours(test_image , std::vector<std::vector<Point>>({piano_rr_contour_upper}) , -1 , Scalar(0x00 , 0xff , 0x00) , 1);
+    drawContours(test_image , std::vector<std::vector<Point>>({piano_rr_contour_lower}) , -1 , Scalar(0xff , 0x00 , 0x00) , 1);
+
+    int upper_hit_count = 0;
+    int lower_hit_count = 0;
+    for(RotatedRect rr : keys_rect_list_1) {
+        if(pointPolygonTest(piano_rr_contour_upper , rr.center , false) > 0) upper_hit_count++;
+        if(pointPolygonTest(piano_rr_contour_lower , rr.center , false) > 0) lower_hit_count++;
+    }
+    flipped = upper_hit_count < lower_hit_count;
+    keys_info.flipped = flipped;
+
+    imshow("contour_rect_test_blahblah" , test_image);
+
     for(int i = 0; i < keys_rect_list_1.size(); i++) {
         if(keys_rect_list_1[i].size.width < keys_info.mean_key_width*0.55) continue;
         if(std::min(keys_rect_list_1[i].size.width , keys_rect_list_1[i].size.height) > keys_info.mean_key_width*1.6) continue;
         if(keys_rect_list_1[i].size.height < keys_info.mean_key_height) {
-            adjust_rotated_rect_height(keys_rect_list_1[i] , keys_info.mean_key_height);
+            adjust_rotated_rect_height(keys_rect_list_1[i] , keys_info.mean_key_height , !keys_info.flipped);
         }
 #ifdef DEBUG
         Scalar color = Scalar(rng.uniform(0 , 255) , rng.uniform(0 , 255) , rng.uniform(0 , 255));
@@ -994,7 +1014,8 @@ void PianoRecognition::detect_black_keys(Mat piano_image , struct piano_keys_inf
         rotated_rect_to_contour(keys_rect_list_1[i] , cr);
         drawContours(colorful , std::vector<std::vector<Point>>{cr} , -1 , color , -1);
 #endif
-        keys_rect_list_1[i].size.width += 2;
+        // compensate with the blur
+        keys_rect_list_1[i].size.width -= 2;
         keys_rect_list_1[i].center.x -= padding;
         keys_rect_list_1[i].center.y -= padding;
         // push the rectangle to the final list
