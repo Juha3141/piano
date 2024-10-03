@@ -125,7 +125,7 @@ class PianoRecognition {
         void detect_white_keys(cv::Mat piano_image , struct piano_keys_info &keys_info , const struct piano_keys_info &black_keys_info);
         
         void adjust_key_angles(struct piano_keys_info &keys_info);
-        void remove_key_outliers(struct piano_keys_info &keys_info);
+        void adjust_key_widths(struct piano_keys_info &keys_info);
         void write_keys_info(struct piano_keys_info &keys_info);
 
         void detect_missing_white_keys(struct piano_keys_info &keys_info);
