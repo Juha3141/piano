@@ -70,9 +70,6 @@ else {
     convexHull(piano.piano_bounding_contour , convex_hull);
     std::cout << "drawing mask... ";
     drawContours(mask , std::vector<std::vector<Point>>({convex_hull}) , 0 , Scalar(0xff , 0xff , 0xff) , -1);
-    imshow("mask" , mask);
-    imshow("original" , frame);
-    
 
     Rect mask_bounding_rect = boundingRect(bounding_rect_contour);
     mask_bounding_rect.x = std::max(mask_bounding_rect.x , 0);
@@ -82,14 +79,10 @@ else {
     piano.piano_loc_x = mask_bounding_rect.x;
     piano.piano_loc_y = mask_bounding_rect.y;
     Mat only_piano = (frame & mask)(mask_bounding_rect);
-    imshow("mask_applied" , frame & mask);
     std::cout << "done!\n";
 
     // make it gray-scaled
     cvtColor(only_piano , only_piano , COLOR_BGR2GRAY);
-    // smooth the image
-    morphologyEx(only_piano , only_piano , MORPH_OPEN , getStructuringElement(MORPH_RECT , Size(3 , 3)));
-    imshow("only_piano" , only_piano);
 
     struct piano_keys_info white_keys_info;
     struct piano_keys_info black_keys_info;
@@ -101,18 +94,19 @@ else {
 
     std::cout << "adjusting white outliers... \n";
     piano.adjust_key_angles(white_keys_info);
-    piano.remove_key_outliers(white_keys_info);
+    piano.adjust_key_widths(white_keys_info);
     std::cout << "adjusting black outliers... \n";
     piano.adjust_key_angles(black_keys_info);
-    piano.remove_key_outliers(black_keys_info);
+    piano.adjust_key_widths(black_keys_info);
     debug_print_colorful(white_keys_info , "white_final");
+    debug_print_colorful(black_keys_info , "black_final");
     /*
     std::cout << "detecting missing black keys... \n";
     piano.detect_missing_black_keys(black_keys_info , white_keys_info);
     debug_print(white_keys_info , "white_keys_bestfit_line");
     debug_print_both(white_keys_info , black_keys_info , "white_black_both");
     */
-/*
+
     std::cout << "detecting missing white keys... \n";
     piano.detect_missing_white_keys(white_keys_info);
     std::cout << "detecting white key shapes... \n";
@@ -130,7 +124,7 @@ else {
     debug_print_notes(white_keys_info , "win4");
     // debug_print(white_keys_info , "win1");
     // debug_print(black_keys_info , "win2");
-*/
+
 
     std::cout << "white keys count : " << white_keys_info.keys_rectangle_list.size() << "\n";
     std::cout << "black keys count : " << black_keys_info.keys_rectangle_list.size() << "\n";
@@ -260,18 +254,13 @@ void debug_print(struct piano_keys_info &keys_info , const char *win) {
 void debug_print_colorful(struct piano_keys_info &keys_info , const char *win) {
     Mat only_piano_copy;
     cvtColor(keys_info.piano_image , only_piano_copy , COLOR_GRAY2BGR);
-    // draw the best fit line
-    for(double x = 0; x < only_piano_copy.size().width; x += 1) {
-        Point point(x , (keys_info.cm_bestfit_b*x)+keys_info.cm_bestfit_a);
-        circle(only_piano_copy , point , 2 , Scalar(0xff , 0x00 , 0x00) , 1);
-    }
     RNG rng((unsigned int)time(0));
     for(int i = 0; i < keys_info.keys_rectangle_list.size(); i++) {
         std::vector<Point>rectangle_contour;
         Scalar color = Scalar(rng.uniform(0 , 255) , rng.uniform(0 , 255) , rng.uniform(0 , 255));
         rotated_rect_to_contour(keys_info.keys_rectangle_list[i] , rectangle_contour);
 
-        drawContours(only_piano_copy , std::vector<std::vector<Point>>({rectangle_contour}) , -1 , color , 2);
+        drawContours(only_piano_copy , std::vector<std::vector<Point>>({rectangle_contour}) , -1 , color , -1);
         circle(only_piano_copy , keys_info.keys_rectangle_list[i].center , 2 , Scalar(0xff , 0x00 , 0x00) , 1);
     }
     imshow(win , only_piano_copy);
