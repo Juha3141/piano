@@ -52,7 +52,7 @@ void hand_detection::execute_agent(void) {
 /// @param 
 bool hand_detection::fetch_hand_data(Mat &current_frame , hands_info_t &hands) {
     GlobalHandDetectionSystem *global_hand_info = GlobalHandDetectionSystem::get_self();
-    if(((unsigned long *)global_hand_info->shm_addr_imgmem)[0] == 0x00) false;
+    if(((unsigned long *)global_hand_info->shm_addr_imgmem)[0] == 0x00) return false;
 
     current_frame = Mat(Size(global_hand_info->screen_width , global_hand_info->screen_height) , CV_8UC3);
     hands_info_t *hands_info = (hands_info_t *)global_hand_info->shm_addr_infomem;
