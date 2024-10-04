@@ -1,6 +1,9 @@
 /* July 2024 */
 
-#include <piano_detection.hpp>
+#include <piano_area_detection.hpp>
+#include <piano_key_detection.hpp>
+#include <piano_note_detection.hpp>
+
 #include <hand_detection_agent.hpp>
 #include <midi_system.hpp>
 
@@ -86,53 +89,49 @@ else {
 
     struct piano_keys_info white_keys_info;
     struct piano_keys_info black_keys_info;
-    piano.detect_black_keys(only_piano , black_keys_info);
-    piano.detect_white_keys(only_piano , white_keys_info , black_keys_info);
+    piano::detect_black_keys(only_piano , black_keys_info);
+    piano::detect_white_keys(only_piano , white_keys_info , black_keys_info);
     // enlarge the black key's width
-    piano.write_keys_info(black_keys_info);
-    piano.write_keys_info(white_keys_info);
+    write_keys_info(black_keys_info);
+    write_keys_info(white_keys_info);
 
     std::cout << "adjusting white outliers... \n";
-    piano.adjust_key_angles(white_keys_info);
-    piano.adjust_key_widths(white_keys_info);
+    piano::adjust_key_angles(white_keys_info);
+    piano::adjust_key_widths(white_keys_info);
     std::cout << "adjusting black outliers... \n";
-    piano.adjust_key_angles(black_keys_info);
-    piano.adjust_key_widths(black_keys_info);
+    piano::adjust_key_angles(black_keys_info);
+    piano::adjust_key_widths(black_keys_info);
     debug_print_colorful(white_keys_info , "white_final");
     debug_print_colorful(black_keys_info , "black_final");
-    /*
-    std::cout << "detecting missing black keys... \n";
-    piano.detect_missing_black_keys(black_keys_info , white_keys_info);
+
+    std::cout << "detecting missing black keys... \n"; // !!
+    piano::detect_missing_black_keys(black_keys_info , white_keys_info);
     debug_print(white_keys_info , "white_keys_bestfit_line");
     debug_print_both(white_keys_info , black_keys_info , "white_black_both");
-    */
 
     std::cout << "detecting missing white keys... \n";
-    piano.detect_missing_white_keys(white_keys_info);
+    piano::detect_missing_white_keys(white_keys_info);
     std::cout << "detecting white key shapes... \n";
-    piano.detect_white_key_shapes(white_keys_info , black_keys_info);
+    piano::detect_white_key_shapes(white_keys_info , black_keys_info);
     std::cout << "detecting white key notes... `\n";
-    piano.detect_white_key_notes(white_keys_info , black_keys_info);
+    piano::detect_white_key_notes(white_keys_info , black_keys_info);
     debug_print_both(white_keys_info , black_keys_info , "before_filling");
     std::cout << "filling the missing white keys out... \n";
-    piano.fill_missing_white_keys(white_keys_info);
+    piano::fill_missing_white_keys(white_keys_info);
     std::cout << "double-checking the keys... \n";
-    piano.doublecheck_white_keys(white_keys_info);
-    piano.detect_black_key_notes(white_keys_info , black_keys_info);
-    piano.doublecheck_black_keys(black_keys_info);
+    piano::doublecheck_white_keys(white_keys_info);
+    piano::detect_black_key_notes(white_keys_info , black_keys_info);
+    piano::doublecheck_black_keys(black_keys_info);
     debug_print_both(white_keys_info , black_keys_info , "win3");
     debug_print_notes(white_keys_info , "win4");
-    // debug_print(white_keys_info , "win1");
-    // debug_print(black_keys_info , "win2");
-
 
     std::cout << "white keys count : " << white_keys_info.keys_rectangle_list.size() << "\n";
     std::cout << "black keys count : " << black_keys_info.keys_rectangle_list.size() << "\n";
 
-//if(!is_video) {
+if(!is_video) {
     while(1) { if(waitKey(0) == 27) break; }
     return -1;
-//}
+}
 
     std::cout << "initializing the agent...\n";
     if(hand_detection::initialize_agent(argv[1]) == false) {
