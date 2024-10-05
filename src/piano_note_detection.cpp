@@ -99,11 +99,7 @@ void piano::detect_missing_black_keys(struct piano_keys_info &black_keys_info , 
     }
 //  imshow("blackpoint" , image);
 }
-
-/// @brief Detect the shapes of the white keys
-/// @param white_keys_info 
-/// @param black_keys_info 
-void piano::detect_white_key_shapes(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info) {
+/*
     Mat white_mat(white_keys_info.piano_image.size() , CV_8UC1);
     Mat black_mat(white_keys_info.piano_image.size() , CV_8UC1);
 
@@ -170,6 +166,79 @@ void piano::detect_white_key_shapes(struct piano_keys_info &white_keys_info , st
         std::cout << white_keys_info.white_key_shapes[i] << " , ";
     }
     std::cout << "\n";
+*/
+/// @brief Detect the shapes of the white keys
+/// @param white_keys_info 
+/// @param black_keys_info 
+void piano::detect_white_key_shapes(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info) {
+    std::vector<RotatedRect>rotated_white_rectangles;
+    std::vector<RotatedRect>rotated_black_rectangles;
+    
+#define KEY_NO_BLACK    0
+#define KEY_BLACK_LEFT  1
+#define KEY_BLACK_RIGHT 2
+#define KEY_BLACK_BOTH  3
+
+    // bool  : true = white, false = black
+    // Point : center of mass point
+    // int   : index based on the keys_rectangle_list[] array
+    std::vector<std::tuple<bool , Point , int>>key_adjusted_cm_list;
+
+    RotatedRect piano_bounding_rect(white_keys_info.piano_bounding_rect);
+    Mat demo_image;
+    cvtColor(white_keys_info.piano_image , demo_image , COLOR_GRAY2BGR);
+
+    int average_white_key_cm_y = 0;
+    for(int i = 0; i < white_keys_info.keys_rectangle_list.size(); i++) {
+        RotatedRect rr(white_keys_info.keys_rectangle_list[i]);
+        rr.center = rotational_matrix(rr.center , (-piano_bounding_rect.angle)*M_PI/180.0f , piano_bounding_rect.center);
+        rr.angle -= piano_bounding_rect.angle;
+        rotated_white_rectangles.push_back(rr);
+        average_white_key_cm_y += rr.center.y;
+
+        key_adjusted_cm_list.push_back(std::tuple<bool , Point , int>(true , rr.center , i));
+
+        std::vector<Point>contour;
+        rotated_rect_to_contour(rr , contour);
+        drawContours(demo_image , std::vector<std::vector<Point>>({contour}) , -1 , Scalar(0x00 , 0xff , 0x00) , 1);
+        circle(demo_image , rr.center , 2 , Scalar(0xff , 0x00 , 0x00) , -1);
+    }
+    average_white_key_cm_y /= white_keys_info.keys_rectangle_list.size();
+
+    for(int i = 0; i < black_keys_info.keys_rectangle_list.size(); i++) {
+        RotatedRect rr(black_keys_info.keys_rectangle_list[i]);
+        rr.center = rotational_matrix(rr.center , (-piano_bounding_rect.angle)*M_PI/180.0f , piano_bounding_rect.center);
+        rr.angle -= piano_bounding_rect.angle;
+        rotated_white_rectangles.push_back(rr);
+        Point moved_point(rr.center.x-abs(rr.center.y-average_white_key_cm_y)*tan(rr.angle*M_PI/180.0f) , average_white_key_cm_y);
+
+        key_adjusted_cm_list.push_back(std::tuple<bool , Point , int>(false , moved_point , i));
+
+        std::vector<Point>contour;
+        rotated_rect_to_contour(rr , contour);
+        drawContours(demo_image , std::vector<std::vector<Point>>({contour}) , -1 , Scalar(0x00 , 0xff , 0x00) , 1);
+        circle(demo_image , rr.center , 2 , Scalar(0x00 , 0x00 , 0xff) , -1);
+        circle(demo_image , moved_point , 2 , Scalar(0x00 , 0xff , 0xff) , -1);
+    }
+    std::sort(key_adjusted_cm_list.begin() , key_adjusted_cm_list.end() , 
+        [](const std::tuple<bool , Point , int>&a , const std::tuple<bool , Point , int>&b) {
+            return (std::get<1>(a).x < std::get<1>(b).x); 
+        });
+    
+    std::vector<int>number_of_black_between_white;
+    for(int i = 0; i < key_adjusted_cm_list.size()-1; i++) {
+        if(std::get<0>(key_adjusted_cm_list[i]) == false) continue;
+        bool left = false;
+        bool right = false;
+        if(i > 0 && std::get<0>(key_adjusted_cm_list[i-1]) == false) left = true;
+        if(i < key_adjusted_cm_list.size()-1 && std::get<0>(key_adjusted_cm_list[i+1]) == false) right = true;
+        if(white_keys_info.flipped) std::swap(left , right);
+
+        int key_shape = (right << 1|left);
+        std::cout << "White key #" << std::get<2>(key_adjusted_cm_list[i]) << " : " << key_shape << "\n";
+    }
+    
+    imshow("rotated_rect" , demo_image);
 }
 
 void piano::detect_white_key_notes(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info) {
@@ -183,7 +252,7 @@ void piano::detect_white_key_notes(struct piano_keys_info &white_keys_info , str
      * B : 12
      */
     /*                                   0    1              2              3              4              5              6              7              8*/
-    int key_shape_list[]              = {3,2, 3,4,2,3,4,4,2, 3,4,2,3,4,4,2, 3,4,2,3,4,4,2, 3,4,2,3,4,4,2, 3,4,2,3,4,4,2, 3,4,2,3,4,4,2, 3,4,2,3,4,4,2, 1};
+    int key_shape_list[]              = {2,1, 2,3,1,2,3,3,1, 2,3,1,2,3,3,1, 2,3,1,2,3,3,1, 2,3,1,2,3,3,1, 2,3,1,2,3,3,1, 2,3,1,2,3,3,1, 2,3,1,2,3,3,1, 0};
     int key_shape_list_notes_octave[] = {0,0, 1,1,1,1,1,1,1, 2,2,2,2,2,2,2, 3,3,3,3,3,3,3, 4,4,4,4,4,4,4, 5,5,5,5,5,5,5, 6,6,6,6,6,6,6, 7,7,7,7,7,7,7, 8};
     int key_shape_list_notes[] = {10,12, 1,3,5,6,8,10,12,1,3,5,6,8,10,12,1,3,5,6,8,10,12,1,3,5,6,8,10,12,1,3,5,6,8,10,12,1,3,5,6,8,10,12,1,3,5,6,8,10,12,1};
     for(RotatedRect rr : white_keys_info.keys_rectangle_list) { mean_y += rr.center.y; }
