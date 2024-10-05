@@ -10,6 +10,7 @@ void piano::detect_white_keys(Mat piano_image , struct piano_keys_info &keys_inf
     int rectangles_count = 0;
 
     int padding = 30;
+    memcpy(&keys_info.piano_bounding_rect , &black_keys_info.piano_bounding_rect , sizeof(RotatedRect));
 
 #ifdef DEBUG
     RNG rng((unsigned int)time(0));
@@ -347,17 +348,19 @@ void piano::detect_black_keys(Mat piano_image , struct piano_keys_info &keys_inf
         return (a.center.x < b.center.x);
     });
 
+    std::cout << "(detect_black_keys) 4. Checking whether the image is flipped... \n";
     // check whether the image should be flipped
     bool flipped = false;
     std::vector<double>black_cm_y_list;
     int black_median_cm_y = 0;
-    cvtColor(piano_image_padding , test_image , COLOR_GRAY2BGR);
     
     RotatedRect piano_rotated_rect = minAreaRect(hull[i_max_arc_length]);
     if(piano_rotated_rect.size.height > piano_rotated_rect.size.width) {
         std::swap(piano_rotated_rect.size.height , piano_rotated_rect.size.width);
         piano_rotated_rect.angle -= 90.0f;
     }
+    memcpy(&keys_info.piano_bounding_rect , &piano_rotated_rect , sizeof(RotatedRect));
+    
     RotatedRect piano_rotated_rect_upper(piano_rotated_rect) , piano_rotated_rect_lower(piano_rotated_rect);
     adjust_rotated_rect_height(piano_rotated_rect_upper , piano_rotated_rect.size.height/2 , false);
     adjust_rotated_rect_height(piano_rotated_rect_lower , piano_rotated_rect.size.height/2 , true);
@@ -373,7 +376,9 @@ void piano::detect_black_keys(Mat piano_image , struct piano_keys_info &keys_inf
     }
     flipped = upper_hit_count < lower_hit_count;
     keys_info.flipped = flipped;
+    std::cout << "flipped = " << flipped << "\n";
 
+    std::cout << "(detect_black_keys) 5. Adjusting the heights and widths... \n";
     for(int i = 0; i < keys_rect_list_1.size(); i++) {
         if(keys_rect_list_1[i].size.width < keys_info.mean_key_width*0.55) continue;
         if(std::min(keys_rect_list_1[i].size.width , keys_rect_list_1[i].size.height) > keys_info.mean_key_width*1.6) continue;
@@ -395,8 +400,10 @@ void piano::detect_black_keys(Mat piano_image , struct piano_keys_info &keys_inf
     }
     // imshow("piano_image" , piano_image);
     // imshow("only_black_keys" , only_black_keys);
+#ifdef DEBUG
     imshow("black_keys_enclosed" , black_keys_enclosed);
     imshow("colorful" , colorful);
+#endif
 }
 
 static void remove_item_from_piano_info(struct piano_keys_info &keys_info , int i) {
@@ -481,9 +488,8 @@ void piano::adjust_key_angles(struct piano_keys_info &keys_info) {
             }
             int x = keys_info.keys_rectangle_list[i].center.x , y = keys_info.keys_rectangle_list[i].center.y;
 
-            int rotated_x = (x-x0)*cos(delta_theta*M_PI/180.0f)-(y-y0)*sin(delta_theta*M_PI/180.0f);
-            int rotated_y = (x-x0)*sin(delta_theta*M_PI/180.0f)+(y-y0)*cos(delta_theta*M_PI/180.0f);
-            rotated_x += x0; rotated_y += y0;
+            int rotated_x = rotational_matrix_x(x , y , delta_theta*M_PI/180.0f , x0 , y0);
+            int rotated_y = rotational_matrix_y(x , y , delta_theta*M_PI/180.0f , x0 , y0);
             circle(image_copy , Point(x0 , y0) , 1 , Scalar(0x00 , 0x00 , 0xff) , 2);
 
             circle(image_copy , Point(rr.center.x , rr.center.y) , 1 , Scalar(0xff , 0x00 , 0xff) , 2);
