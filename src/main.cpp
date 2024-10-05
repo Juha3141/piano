@@ -13,6 +13,7 @@ void debug_print(struct piano_keys_info &keys_info , const char *win);
 void debug_print_colorful(struct piano_keys_info &keys_info , const char *win);
 void debug_print_both(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info , const char *win);
 void debug_print_notes(struct piano_keys_info &white_keys_info , const char *win);
+void debug_print_shapes(struct piano_keys_info &white_keys_info , const char *win);
 
 // not implemented yet
 void frame_filter_func(Mat &frame) {}
@@ -103,16 +104,17 @@ else {
     piano::adjust_key_widths(black_keys_info);
     debug_print_colorful(white_keys_info , "white_final");
     debug_print_colorful(black_keys_info , "black_final");
-
-    std::cout << "detecting missing black keys... \n"; // !!
+/*
+    std::cout << "detecting missing black keys... \n";
     piano::detect_missing_black_keys(black_keys_info , white_keys_info);
-    debug_print(white_keys_info , "white_keys_bestfit_line");
-    debug_print_both(white_keys_info , black_keys_info , "white_black_both");
-
     std::cout << "detecting missing white keys... \n";
     piano::detect_missing_white_keys(white_keys_info);
+*/
     std::cout << "detecting white key shapes... \n";
     piano::detect_white_key_shapes(white_keys_info , black_keys_info);
+    // debug_print_shapes(white_keys_info , "white_keys_shapes");
+    debug_print_both(white_keys_info , black_keys_info , "white_and_black");
+/*
     std::cout << "detecting white key notes... `\n";
     piano::detect_white_key_notes(white_keys_info , black_keys_info);
     debug_print_both(white_keys_info , black_keys_info , "before_filling");
@@ -122,8 +124,8 @@ else {
     piano::doublecheck_white_keys(white_keys_info);
     piano::detect_black_key_notes(white_keys_info , black_keys_info);
     piano::doublecheck_black_keys(black_keys_info);
-    debug_print_both(white_keys_info , black_keys_info , "win3");
     debug_print_notes(white_keys_info , "win4");
+*/
 
     std::cout << "white keys count : " << white_keys_info.keys_rectangle_list.size() << "\n";
     std::cout << "black keys count : " << black_keys_info.keys_rectangle_list.size() << "\n";
@@ -294,7 +296,26 @@ void debug_print_notes(struct piano_keys_info &white_keys_info , const char *win
         drawContours(image , std::vector<std::vector<Point>>({rectangle_contour}) , -1 , Scalar(0xff , 0x00 , 0x00) , 1);
 
         // putText(image , std::to_string(i) , white_keys_info.keys_rectangle_list[i].center , FONT_HERSHEY_SIMPLEX , 0.4 , Scalar(0x00 , 0x00 , 0x00) , 1);
-        putText(image , number_to_note_string(white_keys_info.key_notes[i].first) , Point(white_keys_info.keys_rectangle_list[i].center.x , white_keys_info.keys_rectangle_list[i].center.y+(white_keys_info.keys_rectangle_list[i].size.height/3)) , FONT_HERSHEY_SIMPLEX , 0.4 , Scalar(0x00 , 0x00 , 0xff) , 1);
+        int dx = -(white_keys_info.keys_rectangle_list[i].size.height/3)*sin(white_keys_info.keys_rectangle_list[i].angle*M_PI/180.0f);
+        int dy = (white_keys_info.keys_rectangle_list[i].size.height/3)*cos(white_keys_info.keys_rectangle_list[i].angle*M_PI/180.0f);
+        putText(image , number_to_note_string(white_keys_info.key_notes[i].first) , Point(white_keys_info.keys_rectangle_list[i].center.x+dx , white_keys_info.keys_rectangle_list[i].center.y+dy) , FONT_HERSHEY_SIMPLEX , 0.4 , Scalar(0x00 , 0x00 , 0xff) , 1);
+        
+    }
+    imshow(win , image);
+}
+
+void debug_print_shapes(struct piano_keys_info &white_keys_info , const char *win) {
+    Mat image = Mat::zeros(white_keys_info.piano_image.size() , CV_8UC3);
+    cvtColor(white_keys_info.piano_image , image , COLOR_GRAY2BGR);
+    for(int i = 0; i < white_keys_info.keys_rectangle_list.size(); i++) {
+        std::vector<Point>rectangle_contour;
+        rotated_rect_to_contour(white_keys_info.keys_rectangle_list[i] , rectangle_contour);
+        drawContours(image , std::vector<std::vector<Point>>({rectangle_contour}) , -1 , Scalar(0xff , 0x00 , 0x00) , 1);
+
+        // putText(image , std::to_string(i) , white_keys_info.keys_rectangle_list[i].center , FONT_HERSHEY_SIMPLEX , 0.4 , Scalar(0x00 , 0x00 , 0x00) , 1);
+        int dx = -(white_keys_info.keys_rectangle_list[i].size.height/3)*sin(white_keys_info.keys_rectangle_list[i].angle*M_PI/180.0f);
+        int dy = (white_keys_info.keys_rectangle_list[i].size.height/3)*cos(white_keys_info.keys_rectangle_list[i].angle*M_PI/180.0f);
+        putText(image , std::to_string(white_keys_info.white_key_shapes[i]) , Point(white_keys_info.keys_rectangle_list[i].center.x+dx , white_keys_info.keys_rectangle_list[i].center.y+dy) , FONT_HERSHEY_SIMPLEX , 0.4 , Scalar(0x00 , 0x00 , 0xff) , 1);
         
     }
     imshow(win , image);
