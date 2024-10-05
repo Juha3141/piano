@@ -261,3 +261,18 @@ const char *number_to_note_string(int note_number) {
     }
     return "?";
 }
+
+double rotational_matrix_x(double x , double y , double theta , double x0 , double y0) {
+    return ((x-x0)*cos(theta)-(y-y0)*sin(theta))+x0;
+}
+
+double rotational_matrix_y(double x , double y , double theta , double x0 , double y0) {
+    return ((x-x0)*sin(theta)+(y-y0)*cos(theta))+y0;
+}
+
+Point2f rotational_matrix(Point2f p , double theta , Point2f pivot) {
+    return Point2f(
+        rotational_matrix_x(p.x , p.y , theta , pivot.x , pivot.y) , 
+        rotational_matrix_y(p.x , p.y , theta , pivot.x , pivot.y)
+    );
+}

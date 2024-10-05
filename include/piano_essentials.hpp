@@ -41,6 +41,7 @@
 
 struct piano_keys_info {
     cv::Mat piano_image;
+    cv::RotatedRect piano_bounding_rect;
     // false : black keys upper than white keys
     // true  : black keys lower than white keys
     bool flipped;
@@ -103,5 +104,9 @@ void write_keys_info(struct piano_keys_info &keys_info);
 void write_pivot_info(struct piano_keys_info &keys_info);
 
 const char *number_to_note_string(int note_number);
+
+double rotational_matrix_x(double x , double y , double theta , double x0 , double y0);
+double rotational_matrix_y(double x , double y , double theta , double x0 , double y0);
+cv::Point2f rotational_matrix(cv::Point2f p , double theta , cv::Point2f pivot);
 
 #endif
