@@ -104,28 +104,21 @@ else {
     piano::adjust_key_widths(black_keys_info);
     debug_print_colorful(white_keys_info , "white_final");
     debug_print_colorful(black_keys_info , "black_final");
-/*
-    std::cout << "detecting missing black keys... \n";
-    piano::detect_missing_black_keys(black_keys_info , white_keys_info);
-    std::cout << "detecting missing white keys... \n";
-    piano::detect_missing_white_keys(white_keys_info);
-*/
+
+    std::cout << "detecting missing white spots... \n";
+    piano::detect_white_missing_spots(white_keys_info);
+
     std::cout << "detecting white key shapes... \n";
     piano::detect_white_key_shapes(white_keys_info , black_keys_info);
-    // debug_print_shapes(white_keys_info , "white_keys_shapes");
-    debug_print_both(white_keys_info , black_keys_info , "white_and_black");
-/*
     std::cout << "detecting white key notes... `\n";
     piano::detect_white_key_notes(white_keys_info , black_keys_info);
+    piano::adjust_wrong_white_notes(white_keys_info);
     debug_print_both(white_keys_info , black_keys_info , "before_filling");
     std::cout << "filling the missing white keys out... \n";
     piano::fill_missing_white_keys(white_keys_info);
-    std::cout << "double-checking the keys... \n";
-    piano::doublecheck_white_keys(white_keys_info);
+
     piano::detect_black_key_notes(white_keys_info , black_keys_info);
-    piano::doublecheck_black_keys(black_keys_info);
-    debug_print_notes(white_keys_info , "win4");
-*/
+    debug_print_notes(white_keys_info , "white_key_notes");
 
     std::cout << "white keys count : " << white_keys_info.keys_rectangle_list.size() << "\n";
     std::cout << "black keys count : " << black_keys_info.keys_rectangle_list.size() << "\n";
