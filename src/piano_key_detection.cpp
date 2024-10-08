@@ -2,6 +2,8 @@
 
 using namespace cv;
 
+#define DEBUG
+
 /// @brief Create the rectangular contour area of the white keys from the image of piano.
 /// @param piano_image The processed image of the piano. The image should only contain the piano and should be gray-scaled. 
 /// @param keys_info 
@@ -406,16 +408,12 @@ void piano::detect_black_keys(Mat piano_image , struct piano_keys_info &keys_inf
 #endif
 }
 
-static void remove_item_from_piano_info(struct piano_keys_info &keys_info , int i) {
-    keys_info.keys_rectangle_list.erase(keys_info.keys_rectangle_list.begin()+i);
-    if(i > 0 && i < keys_info.cm_dist_from_bestfit_list.size()-1) {
-        // remove two components and recalibrate the distance
-        keys_info.dist_between_keys_list[i] = euclidean_distance(keys_info.keys_rectangle_list[i-1].center , keys_info.keys_rectangle_list[i+1].center);
-    }
-    keys_info.dist_between_keys_list.erase(keys_info.dist_between_keys_list.begin()+i-1);
-    keys_info.cm_dist_from_bestfit_list.erase(keys_info.cm_dist_from_bestfit_list.begin()+i);
-}
-
+/// @brief Divide the array into regions that are (almost) in same sizes
+/// @tparam T 
+/// @param data_list list of data that will be separated
+/// @param number_of_regions number of regions
+/// @param regions separated array
+/// @param region_indicator array that indicates what region is the item in
 template <typename T> static void region_divider(std::vector<T>&data_list , int number_of_regions , std::vector<std::vector<T>>&regions , std::vector<int>&region_indicator) {
     int count = data_list.size();
     double region_indexes[number_of_regions];
@@ -518,8 +516,33 @@ void piano::adjust_key_widths(struct piano_keys_info &keys_info) {
     double width_median = keys_info.median_key_width;
     for(int i = 0; i < keys_info.keys_rectangle_list.size(); i++) {
         if(keys_info.keys_rectangle_list[i].size.width > 1.4*width_median) {
-            std::cout << "outlier : " << i << "\n";
             adjust_rotated_rect_width(keys_info.keys_rectangle_list[i] , width_median);
+        }
+    }
+}
+
+/// @brief Based on the local medians of the distances, get the spots that are missing some keys
+/// @param white_white_keys_info 
+void piano::detect_white_missing_spots(struct piano_keys_info &white_keys_info) {
+    std::vector<double>dist_list;
+    dist_list.resize(white_keys_info.keys_rectangle_list.size()-1);
+    for(int i = 0; i < white_keys_info.keys_rectangle_list.size()-1; i++) {
+        double distance = euclidean_distance(white_keys_info.keys_rectangle_list[i].center , white_keys_info.keys_rectangle_list[i+1].center);
+        dist_list[i] = distance;
+    }
+    std::vector<std::vector<double>>dist_list_regions;
+    std::vector<int>region_indicator;
+    region_divider<double>(dist_list , 5 , dist_list_regions , region_indicator);
+    
+    for(int i = 0; i < white_keys_info.keys_rectangle_list.size()-1; i++) {
+        // calculate the regional medians
+        int region_i = region_indicator[i];
+        double local_median = calculate_median(dist_list_regions[region_i]);
+        if(dist_list[i] >= local_median*1.5) { // outlier!
+            white_keys_info.missing_key_spots_list.push_back(std::pair<int , int>(i , i+1));
+#ifdef DEBUG
+            std::cout << "missing : between " << i << " and " << i+1 << "\n";
+#endif
         }
     }
 }
