@@ -1,4 +1,4 @@
-#include <piano_essentials.hpp>
+#include <piano_detection.hpp>
 
 using namespace cv;
 using namespace xfeatures2d;
@@ -21,10 +21,10 @@ void rotated_rect_to_contour(const RotatedRect &rect , std::vector<Point>&contou
     for(int i = 0; i < 4; i++) { contour.push_back(contour_minarea[i]); }
 }
 
-void relocate_rotated_rect_list(std::vector<cv::RotatedRect>&rect_list , int x , int y) {
+void relocate_rotated_rect_list(std::vector<cv::RotatedRect>&rect_list , int dx , int dy) {
     for(int i = 0; i < rect_list.size(); i++) {
-        rect_list[i].center.x += x;
-        rect_list[i].center.y += y;
+        rect_list[i].center.x += dx;
+        rect_list[i].center.y += dy;
     }
 }
 
@@ -60,6 +60,21 @@ double calculate_standard_deviation(std::vector<double>&data_list , double mean)
     return sqrt(standard_deviation/(double)data_list.size());
 }
 
+double rotational_matrix_x(double x , double y , double theta , double x0 , double y0) {
+    return ((x-x0)*cos(theta)-(y-y0)*sin(theta))+x0;
+}
+
+double rotational_matrix_y(double x , double y , double theta , double x0 , double y0) {
+    return ((x-x0)*sin(theta)+(y-y0)*cos(theta))+y0;
+}
+
+Point2f rotational_matrix(Point2f p , double theta , Point2f pivot) {
+    return Point2f(
+        rotational_matrix_x(p.x , p.y , theta , pivot.x , pivot.y) , 
+        rotational_matrix_y(p.x , p.y , theta , pivot.x , pivot.y)
+    );
+}
+
 /// @brief Adjust the height of the rotated rectangle
 /// @param rect The target rotated rectangle
 /// @param new_height new height
@@ -90,34 +105,47 @@ void adjust_rotated_rect_width(RotatedRect &rect , int new_width , bool directio
     rect.size.width = new_width;
 }
 
+const char *number_to_note_string(int note_number) {
+    switch(NOTE(note_number)) {
+        case PIANO_KEY_C:      return "C";
+        case PIANO_KEY_Csharp: return "C#";
+        case PIANO_KEY_D:      return "D";
+        case PIANO_KEY_Dsharp: return "D#";
+        case PIANO_KEY_E:      return "E";
+        case PIANO_KEY_F:      return "F";
+        case PIANO_KEY_Fsharp: return "F#";
+        case PIANO_KEY_G:      return "G";
+        case PIANO_KEY_Gsharp: return "G#";
+        case PIANO_KEY_A:      return "A";
+        case PIANO_KEY_Asharp: return "A#";
+        case PIANO_KEY_B:      return "B";
+    }
+    return "?";
+}
+
+
 /// @brief Write the keys info to the structure based on the informations provided
 ///        Necessary information consists: 
 ///         1. keys_info.keys_rectangle_list
 /// @param keys_info 
-void write_keys_info(struct piano_keys_info &keys_info) {
+void write_keys_info(piano_keys_info_t &keys_info) {
     std::vector<Point>center_points;
     for(RotatedRect r : keys_info.keys_rectangle_list) { center_points.push_back(r.center); }
 
-    std::cout << "Calculating the best fit line...\n";
     // calculate the best fits of the center masses
     if(center_points.size() == 0) {
         std::cout << "calculation failed! recalibration required..\n";
         return;
     }
+
     Vec4f best_fit_line;
     fitLine(center_points , best_fit_line , DIST_L2 , 0 , 0.01 , 0.01);
     double bestfit_vx = best_fit_line[0] , bestfit_vy = best_fit_line[1] , bestfit_x0 = best_fit_line[2] , bestfit_y0 = best_fit_line[3];
     double bestfit_b = bestfit_vy/bestfit_vx;
     double bestfit_a = -(bestfit_b*bestfit_x0)+bestfit_y0;
 
-    keys_info.mean_dist_from_bestfit = 0;
-    keys_info.mean_dist_between_keys = 0;
-    keys_info.median_dist_between_keys = 0;
-    keys_info.mean_key_y = 0;
-
     std::vector<double>dist_median_list , y_list;
 
-    std::cout << "Calculating the distance between the line...\n";
     if(keys_info.keys_rectangle_list.size() <= 1) {
         std::cout << "No keys in the key_rectangle_list!!\n";
         return;
@@ -125,14 +153,6 @@ void write_keys_info(struct piano_keys_info &keys_info) {
     keys_info.cm_bestfit_b = bestfit_b;
     keys_info.cm_bestfit_a = bestfit_a;
     for(int i = 0; i < keys_info.keys_rectangle_list.size(); i++) {
-        /* Calculate the center of mass's distance from the line */
-        // use the formula : https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
-        Point center = keys_info.keys_rectangle_list[i].center;
-        double distance_from_best_fit = abs(bestfit_b*center.x-center.y+bestfit_a)/sqrt((bestfit_b*bestfit_b)+1.0f);
-        // push the distance to the list
-        keys_info.cm_dist_from_bestfit_list.push_back(distance_from_best_fit);
-        keys_info.mean_dist_from_bestfit += distance_from_best_fit;
-        
         /* Calculate the distance between the keys(based on center of mass) */
         // skip the last one
         if(i >= keys_info.keys_rectangle_list.size()-1) { keys_info.dist_between_keys_list.push_back(-1); continue; }
@@ -141,35 +161,22 @@ void write_keys_info(struct piano_keys_info &keys_info) {
         
         // y-coord
         y_list.push_back(keys_info.keys_rectangle_list[i].center.y);
-        keys_info.mean_key_y += keys_info.keys_rectangle_list[i].center.y;
 
-        keys_info.dist_between_keys_list.push_back(distance_between_keys);
         dist_median_list.push_back(distance_between_keys);
-        keys_info.mean_dist_between_keys += distance_between_keys;
     }
-    keys_info.mean_key_y /= keys_info.keys_rectangle_list.size();
-    keys_info.mean_dist_from_bestfit /= keys_info.keys_rectangle_list.size();
-    keys_info.mean_dist_between_keys /= (keys_info.keys_rectangle_list.size()-1);
-
-    keys_info.median_dist_between_keys = calculate_median(dist_median_list);
-    keys_info.std_dev_key_y = calculate_standard_deviation(y_list , keys_info.mean_key_y);
-    std::cout << "mean_dist_between_keys = " << keys_info.mean_dist_between_keys << "\n";
-
-    write_pivot_info(keys_info);
 }
 
-void write_pivot_info(struct piano_keys_info &keys_info) {
+void write_pivot_info(PianoInfo &piano_info , white_or_black_t white_or_black) {
     // if flipped, the pivot should be the higher point on the rectangle
     // if not flipped, the pivot should be the lower point on the rectangle
-    
+    piano_keys_info_t *keys_info = white_or_black ? (piano_keys_info_t *)&piano_info.white_keys_info : (piano_keys_info_t *)&piano_info.black_keys_info;
 #ifdef DEBUG
     Mat pivot_image;
     cvtColor(keys_info.piano_image , pivot_image , COLOR_GRAY2BGR);
 #endif
-    std::cout << "flipped : " << keys_info.flipped << "\n";
-    for(int i = 0; i < keys_info.keys_rectangle_list.size(); i++) {
+    for(int i = 0; i < keys_info->keys_rectangle_list.size(); i++) {
         std::vector<Point2f>pts;
-        keys_info.keys_rectangle_list[i].points(pts);
+        keys_info->keys_rectangle_list[i].points(pts);
         // 0,1 <--> 2,3
         // 1,2 <--> 3,0
         Point p1,p2;
@@ -188,7 +195,7 @@ void write_pivot_info(struct piano_keys_info &keys_info) {
 
         // compare which points are more farther 
         int avg_y_1 = (width_p1.y+width_p2.y)/2 , avg_y_2 = (width_p3.y+width_p4.y)/2;
-        if(keys_info.flipped) {
+        if(piano_info.flipped) {
             if(avg_y_1 < avg_y_2) { p1 = width_p1; p2 = width_p2; alternative_p1 = width_p3; alternative_p2 = width_p4; }
             else { p1 = width_p3; p2 = width_p4; alternative_p1 = width_p1; alternative_p2 = width_p2; }
         }
@@ -199,17 +206,17 @@ void write_pivot_info(struct piano_keys_info &keys_info) {
         bool overlap = false;
         Point midpoint((p1.x+p2.x)/2 , (p1.y+p2.y)/2);
         Point midpoint_a((alternative_p1.x+alternative_p2.x)/2 , (alternative_p1.y+alternative_p2.y)/2);
-        int width = keys_info.keys_rectangle_list[i].size.width;
+        int width = keys_info->keys_rectangle_list[i].size.width;
         double dist = euclidean_distance(midpoint , midpoint_a);
         double m = (double)width/2.0f , n = dist-((double)width/2.0f);
         
         // use internal division to calculate the coordinate of the pivot
         Point pivot(((m*midpoint_a.x+n*midpoint.x)/(m+n)) , ((m*midpoint_a.y+n*midpoint.y)/(m+n)));
 
-        for(int j = 0; j < keys_info.keys_rectangle_list.size(); j++) {
+        for(int j = 0; j < keys_info->keys_rectangle_list.size(); j++) {
             if(j == i) continue;
             std::vector<Point>contour;
-            RotatedRect rr = keys_info.keys_rectangle_list[j];
+            RotatedRect rr = keys_info->keys_rectangle_list[j];
             rr.size.width *= 1.25; // slightly inflate the width of rectangle
             rotated_rect_to_contour(rr , contour);
             if(pointPolygonTest(contour , pivot , false) > 0) {
@@ -230,7 +237,7 @@ void write_pivot_info(struct piano_keys_info &keys_info) {
         // use internal division to calculate the coordinate of the pivot
         pivot = Point(((m*midpoint_a.x+n*midpoint.x)/(m+n)) , ((m*midpoint_a.y+n*midpoint.y)/(m+n)));
         
-        keys_info.keys_rectangle_pivot.push_back(pivot);
+        keys_info->keys_rectangle_pivot.push_back(pivot);
 #ifdef DEBUG
         std::vector<Point>dc;
         rotated_rect_to_contour(keys_info.keys_rectangle_list[i] , dc);
@@ -247,37 +254,4 @@ void write_pivot_info(struct piano_keys_info &keys_info) {
     static int dn = 1;
     imshow("pivot_info"+std::to_string(dn++) , pivot_image);
 #endif
-}
-
-const char *number_to_note_string(int note_number) {
-    switch(NOTE(note_number)) {
-        case PIANO_KEY_C:      return "C";
-        case PIANO_KEY_Csharp: return "C#";
-        case PIANO_KEY_D:      return "D";
-        case PIANO_KEY_Dsharp: return "D#";
-        case PIANO_KEY_E:      return "E";
-        case PIANO_KEY_F:      return "F";
-        case PIANO_KEY_Fsharp: return "F#";
-        case PIANO_KEY_G:      return "G";
-        case PIANO_KEY_Gsharp: return "G#";
-        case PIANO_KEY_A:      return "A";
-        case PIANO_KEY_Asharp: return "A#";
-        case PIANO_KEY_B:      return "B";
-    }
-    return "?";
-}
-
-double rotational_matrix_x(double x , double y , double theta , double x0 , double y0) {
-    return ((x-x0)*cos(theta)-(y-y0)*sin(theta))+x0;
-}
-
-double rotational_matrix_y(double x , double y , double theta , double x0 , double y0) {
-    return ((x-x0)*sin(theta)+(y-y0)*cos(theta))+y0;
-}
-
-Point2f rotational_matrix(Point2f p , double theta , Point2f pivot) {
-    return Point2f(
-        rotational_matrix_x(p.x , p.y , theta , pivot.x , pivot.y) , 
-        rotational_matrix_y(p.x , p.y , theta , pivot.x , pivot.y)
-    );
 }
