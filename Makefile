@@ -5,7 +5,7 @@ BINARYFOLDER  = bin
 TARGET = piano
 
 CC = g++
-CCOPTIONS    = -g -W -Wall -Wno-sign-compare
+CCOPTIONS    = -g -W -Wall -Wno-sign-compare -Wno-missing-field-initializers
 LIBS         = $(shell pkg-config opencv4 --libs)
 INCLUDEPATHS = -I $(HEADERSFOLDER) -I /usr/local/include/opencv4 $(shell pkg-config opencv4 --cflags)
 
