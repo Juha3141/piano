@@ -49,7 +49,6 @@ struct piano_keys_info {
     // List of RotatedRects of the keys
     std::vector<cv::RotatedRect>keys_rectangle_list;
     std::vector<cv::Point>keys_rectangle_pivot;
-    std::vector<std::vector<std::pair<cv::RotatedRect , int>>*>separated_keys_rectangle_list;
 
     // mean width, height, area of the keys
     double mean_key_width;
@@ -74,12 +73,17 @@ struct piano_keys_info {
 
     // first : note of the key , second : 0-52 index of the note
     std::vector<std::pair<int , int>>key_notes;
+    // bool  : true = white, false = black
+    // Point : center of mass point
+    // int   : index based on the keys_rectangle_list[] array
+    std::vector<std::tuple<bool , cv::Point , int>>key_adjusted_cm_list;
 
 /* for white keys */
-
     // List of the key notes and shapes
     // shape of the white key
     std::vector<int>white_key_shapes;
+    std::vector<std::pair<int , int>>missing_key_spots_list;
+    std::vector<std::pair<int , int>>missing_key_count_list;
 };
 
 typedef void(*filter_func_t)(cv::Mat &filter);
