@@ -198,13 +198,21 @@ void write_pivot_info(struct piano_keys_info &keys_info) {
         }
         bool overlap = false;
         Point midpoint((p1.x+p2.x)/2 , (p1.y+p2.y)/2);
+        Point midpoint_a((alternative_p1.x+alternative_p2.x)/2 , (alternative_p1.y+alternative_p2.y)/2);
+        int width = keys_info.keys_rectangle_list[i].size.width;
+        double dist = euclidean_distance(midpoint , midpoint_a);
+        double m = (double)width/2.0f , n = dist-((double)width/2.0f);
+        
+        // use internal division to calculate the coordinate of the pivot
+        Point pivot(((m*midpoint_a.x+n*midpoint.x)/(m+n)) , ((m*midpoint_a.y+n*midpoint.y)/(m+n)));
+
         for(int j = 0; j < keys_info.keys_rectangle_list.size(); j++) {
             if(j == i) continue;
             std::vector<Point>contour;
             RotatedRect rr = keys_info.keys_rectangle_list[j];
             rr.size.width *= 1.25; // slightly inflate the width of rectangle
             rotated_rect_to_contour(rr , contour);
-            if(pointPolygonTest(contour , midpoint , false) > 0) {
+            if(pointPolygonTest(contour , pivot , false) > 0) {
                 overlap = true;
                 break;
             }
@@ -216,14 +224,11 @@ void write_pivot_info(struct piano_keys_info &keys_info) {
         }
         // redeclare the midpoint
         midpoint = Point((p1.x+p2.x)/2 , (p1.y+p2.y)/2);
-        Point midpoint_a((alternative_p1.x+alternative_p2.x)/2 , (alternative_p1.y+alternative_p2.y)/2);
+        midpoint_a = Point((alternative_p1.x+alternative_p2.x)/2 , (alternative_p1.y+alternative_p2.y)/2);
         // calculate the pivot from the two points
-        int width = keys_info.keys_rectangle_list[i].size.width;
-        double dist = euclidean_distance(midpoint , midpoint_a);
-        double m = (double)width/2.0f , n = dist-((double)width/2.0f);
         
         // use internal division to calculate the coordinate of the pivot
-        Point pivot(((m*midpoint_a.x+n*midpoint.x)/(m+n)) , ((m*midpoint_a.y+n*midpoint.y)/(m+n)));
+        pivot = Point(((m*midpoint_a.x+n*midpoint.x)/(m+n)) , ((m*midpoint_a.y+n*midpoint.y)/(m+n)));
         
         keys_info.keys_rectangle_pivot.push_back(pivot);
 #ifdef DEBUG
