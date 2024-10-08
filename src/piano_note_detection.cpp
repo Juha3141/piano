@@ -1,8 +1,9 @@
-#include <piano_note_detection.hpp>
-#include <piano_key_detection.hpp>
+#include <piano_detection.hpp>
 
 using namespace cv;
 using namespace xfeatures2d;
+
+#define DEBUG
 
 // shape of the keys
 #define KEY_NO_BLACK    0
@@ -10,81 +11,83 @@ using namespace xfeatures2d;
 #define KEY_BLACK_RIGHT 2
 #define KEY_BLACK_BOTH  3
 
-void piano::create_white_adjusted_cm_list(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info) {
+void PianoInfo::create_white_adjusted_cm_list(void) {
     std::vector<RotatedRect>rotated_white_rectangles;
     std::vector<RotatedRect>rotated_black_rectangles;
 
-    RotatedRect piano_bounding_rect(white_keys_info.piano_bounding_rect);
     Mat demo_image;
-    cvtColor(white_keys_info.piano_image , demo_image , COLOR_GRAY2BGR);
+    cvtColor(piano_image , demo_image , COLOR_GRAY2BGR);
 
     // rotate the positions of the rectangles
     int average_white_key_cm_y = 0;
-    for(int i = 0; i < white_keys_info.keys_rectangle_list.size(); i++) {
-        RotatedRect rr(white_keys_info.keys_rectangle_list[i]);
-        rr.center = rotational_matrix(rr.center , (-piano_bounding_rect.angle)*M_PI/180.0f , piano_bounding_rect.center);
-        rr.angle -= piano_bounding_rect.angle;
+    for(int i = 0; i < this->white_keys_info.keys_rectangle_list.size(); i++) {
+        RotatedRect rr(this->white_keys_info.keys_rectangle_list[i]);
+        rr.center = rotational_matrix(rr.center , (-this->piano_bounding_rect.angle)*M_PI/180.0f , this->piano_bounding_rect.center);
+        rr.angle -= this->piano_bounding_rect.angle;
         rotated_white_rectangles.push_back(rr);
         average_white_key_cm_y += rr.center.y;
 
-        white_keys_info.key_adjusted_cm_list.push_back(std::tuple<bool , Point , int>(true , rr.center , i));
-
+        this->key_adjusted_cm_list.push_back(std::tuple<bool , Point , int>(true , rr.center , i));
+    
+#ifdef DEBUG
         std::vector<Point>contour;
         rotated_rect_to_contour(rr , contour);
         drawContours(demo_image , std::vector<std::vector<Point>>({contour}) , -1 , Scalar(0x00 , 0xff , 0x00) , 1);
         circle(demo_image , rr.center , 2 , Scalar(0xff , 0x00 , 0x00) , -1);
+#endif
     }
-    average_white_key_cm_y /= white_keys_info.keys_rectangle_list.size();
+    average_white_key_cm_y /= this->white_keys_info.keys_rectangle_list.size();
 
-    for(int i = 0; i < black_keys_info.keys_rectangle_list.size(); i++) {
-        RotatedRect rr(black_keys_info.keys_rectangle_list[i]);
-        rr.center = rotational_matrix(rr.center , (-piano_bounding_rect.angle)*M_PI/180.0f , piano_bounding_rect.center);
-        rr.angle -= piano_bounding_rect.angle;
+    for(int i = 0; i < this->black_keys_info.keys_rectangle_list.size(); i++) {
+        RotatedRect rr(this->black_keys_info.keys_rectangle_list[i]);
+        rr.center = rotational_matrix(rr.center , (-this->piano_bounding_rect.angle)*M_PI/180.0f , this->piano_bounding_rect.center);
+        rr.angle -= this->piano_bounding_rect.angle;
         rotated_white_rectangles.push_back(rr);
         Point moved_point(rr.center.x-abs(rr.center.y-average_white_key_cm_y)*tan(rr.angle*M_PI/180.0f) , average_white_key_cm_y);
 
-        white_keys_info.key_adjusted_cm_list.push_back(std::tuple<bool , Point , int>(false , moved_point , i));
+        this->key_adjusted_cm_list.push_back(std::tuple<bool , Point , int>(false , moved_point , i));
 
+#ifdef DEBUG
         std::vector<Point>contour;
         rotated_rect_to_contour(rr , contour);
         drawContours(demo_image , std::vector<std::vector<Point>>({contour}) , -1 , Scalar(0x00 , 0xff , 0x00) , 1);
         circle(demo_image , rr.center , 2 , Scalar(0x00 , 0x00 , 0xff) , -1);
         circle(demo_image , moved_point , 2 , Scalar(0x00 , 0xff , 0xff) , -1);
+#endif
     }
-    std::sort(white_keys_info.key_adjusted_cm_list.begin() , white_keys_info.key_adjusted_cm_list.end() , 
+    std::sort(this->key_adjusted_cm_list.begin() , this->key_adjusted_cm_list.end() , 
         [](const std::tuple<bool , Point , int>&a , const std::tuple<bool , Point , int>&b) {
             return (std::get<1>(a).x < std::get<1>(b).x); 
         });
-    imshow("rotated_rect" , demo_image);
+#ifdef DEBUG
+    imshow("create_white_adjusted_cm_list" , demo_image);
+#endif
 }
 
 /// @brief Detect the shapes of the white keys
-/// @param white_keys_info 
-/// @param black_keys_info 
-void piano::detect_white_key_shapes(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info) {
-    if(white_keys_info.key_adjusted_cm_list.size() == 0) create_white_adjusted_cm_list(white_keys_info , black_keys_info);
+void PianoInfo::detect_white_key_shapes(void) {
+    if(this->key_adjusted_cm_list.size() == 0) create_white_adjusted_cm_list();
 
     std::vector<int>number_of_black_between_white;
     white_keys_info.white_key_shapes.resize(white_keys_info.keys_rectangle_list.size());
-    for(int i = 0; i < white_keys_info.key_adjusted_cm_list.size()-1; i++) {
-        if(std::get<0>(white_keys_info.key_adjusted_cm_list[i]) == false) continue;
+    for(int i = 0; i < this->key_adjusted_cm_list.size()-1; i++) {
+        if(std::get<0>(this->key_adjusted_cm_list[i]) == false) continue;
         bool left = false;
         bool right = false;
         // check where are the black keys
-        if(i > 0 && std::get<0>(white_keys_info.key_adjusted_cm_list[i-1]) == false) left = true;
-        if(i < white_keys_info.key_adjusted_cm_list.size()-1 && std::get<0>(white_keys_info.key_adjusted_cm_list[i+1]) == false) right = true;
+        if(i > 0 && std::get<0>(this->key_adjusted_cm_list[i-1]) == false) left = true;
+        if(i < this->key_adjusted_cm_list.size()-1 && std::get<0>(this->key_adjusted_cm_list[i+1]) == false) right = true;
 
         // if the image is flipped, the key shape must also be flipped
-        if(white_keys_info.flipped) std::swap(left , right);
+        if(this->flipped) std::swap(left , right);
 
         int key_shape = (right << 1|left);
-        std::cout << "White key #" << std::get<2>(white_keys_info.key_adjusted_cm_list[i]) << " : " << key_shape << "\n";
-        white_keys_info.white_key_shapes[std::get<2>(white_keys_info.key_adjusted_cm_list[i])] = key_shape;
+        std::cout << "White key #" << std::get<2>(this->key_adjusted_cm_list[i]) << " : " << key_shape << "\n";
+        white_keys_info.white_key_shapes[std::get<2>(this->key_adjusted_cm_list[i])] = key_shape;
     }
 }
 
-void piano::detect_white_key_notes(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info) {
-    double mean_y = 0;
+void PianoInfo::detect_white_key_notes(void) {
     /* C : 1
      * D : 3
      * E : 5
@@ -97,25 +100,11 @@ void piano::detect_white_key_notes(struct piano_keys_info &white_keys_info , str
     int key_shape_list[]              = {2, 1,  2,3,1,2,3,3, 1,  2,3,1,2,3,3, 1,  2,3,1,2,3,3, 1,  2,3,1,2,3,3, 1,  2,3,1,2,3,3, 1,  2,3,1,2,3,3, 1,  2,3,1,2,3,3, 1,  0};
     int key_shape_list_notes_octave[] = {0, 0,  1,1,1,1,1,1, 1,  2,2,2,2,2,2, 2,  3,3,3,3,3,3, 3,  4,4,4,4,4,4, 4,  5,5,5,5,5,5, 5,  6,6,6,6,6,6, 6,  7,7,7,7,7,7, 7,  8};
     int key_shape_list_notes[] =        {10,12, 1,3,5,6,8,10,12, 1,3,5,6,8,10,12, 1,3,5,6,8,10,12, 1,3,5,6,8,10,12, 1,3,5,6,8,10,12, 1,3,5,6,8,10,12, 1,3,5,6,8,10,12, 1};
-    for(RotatedRect rr : white_keys_info.keys_rectangle_list) { mean_y += rr.center.y; }
-    mean_y /= (double)white_keys_info.keys_rectangle_list.size();
-
-    std::cout << "mean_y : " << mean_y << "\n";
-    double current_x , current_y;
-    current_x = white_keys_info.keys_rectangle_list[0].center.x;
-    current_y = white_keys_info.keys_rectangle_list[0].center.y;
+    
     std::cout << "------ detect_white_key_notes ------\n";
-    double previous_width = white_keys_info.keys_rectangle_list[0].size.width*cos(white_keys_info.keys_rectangle_list[0].angle*M_PI/180.0f);
-    int previous_hit_index = 0;
-    double distance = 0;
     int current_offset = 0;
-    if(white_keys_info.flipped) {
-        std::cout << "flipped, flipping the lists...\n";
+    if(this->flipped) {
         std::reverse(std::begin(key_shape_list) , std::end(key_shape_list));
-        for(int a : key_shape_list) {
-            std::cout << a;
-        }
-        std::cout << "\n";
         std::reverse(std::begin(key_shape_list_notes_octave) , std::end(key_shape_list_notes_octave));
         std::reverse(std::begin(key_shape_list_notes) , std::end(key_shape_list_notes));
     }
@@ -153,76 +142,11 @@ void piano::detect_white_key_notes(struct piano_keys_info &white_keys_info , str
     return;
 }
 
-void piano::detect_missing_black_keys(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info) {
-        if(black_keys_info.dist_between_keys_list.size() == 0) {
-        std::cout << "dist_between_keys_list empty!\n";
-        return;
-    }
-    int missing_black_keys = 36-black_keys_info.keys_rectangle_list.size();
-    int black_key_distance_list[] = {
-        2,
-        1,2,1,1,2,
-        1,2,1,1,2,
-        1,2,1,1,2,
-        1,2,1,1,2,
-        1,2,1,1,2,
-        1,2,1,1,2,
-        1,2,1,1,
-    };
-    int black_key_distance_cumulative[35] = {0 , };
-    for(int i = 1; i < 35; i++) {
-        black_key_distance_cumulative[i] = black_key_distance_cumulative[i-1]+black_key_distance_list[i];
-    }
-    
-    Mat image = Mat::zeros(white_keys_info.piano_image.size() , CV_8UC3);
-
-    RNG rng((unsigned int)time(0));
-    std::vector<int>key_count_list;
-    for(int i = 0; i < black_keys_info.keys_rectangle_list.size()-1; i++) {
-        // compare with the nearby keys
-        std::cout << "-- " << i << "--\n";
-        std::cout << "distance  : " << black_keys_info.dist_between_keys_list[i] << "\n";
-        
-        double width = white_keys_info.median_key_width;//*cos(black_keys_info.keys_rectangle_list[i].angle*M_PI/180.0f);
-        
-        std::vector<Point2f>pts;
-        black_keys_info.keys_rectangle_list[i].points(pts);
-        int current_x = (pts[2].x+pts[3].x)/2;
-        int current_y = (pts[2].y+pts[3].y)/2;
-        for(int j = 0; j < white_keys_info.keys_rectangle_list.size(); j++) {
-            std::vector<Point>contour;
-            rotated_rect_to_contour(white_keys_info.keys_rectangle_list[j] , contour);
-            if(pointPolygonTest(contour , Point2f(current_x , current_y) , false) > 0) {
-                width = white_keys_info.keys_rectangle_list[j].size.width;//*cos(black_keys_info.keys_rectangle_list[i].angle*M_PI/180.0f);
-                break;
-            }
-        }
-        Scalar color = Scalar(rng.uniform(0 , 180) , rng.uniform(0 , 180) , rng.uniform(0 , 180));
-        
-        std::cout << "width   : " << width << "\n";
-        int key_count = round((double)black_keys_info.dist_between_keys_list[i]/width);
-        std::cout << "key_count : " << key_count << "\n";
-        bool match = (key_count == black_key_distance_list[i]);
-        std::cout << "match     : " << match << "\n";
-        key_count_list.push_back(key_count);
-    }
-
-    for(int i = 0; i < key_count_list.size(); i++) {
-        if(key_count_list[i] == black_key_distance_list[i]) continue;
-        
-        std::cout << "black key #" << i << "\n";
-        
-    }
-//  imshow("blackpoint" , image);
-}
-
-void piano::detect_black_key_notes(struct piano_keys_info &white_keys_info , struct piano_keys_info &black_keys_info) {
-    if(white_keys_info.key_adjusted_cm_list.size() == 0) piano::create_white_adjusted_cm_list(white_keys_info , black_keys_info);
+void PianoInfo::detect_black_key_notes(void) {
+    if(key_adjusted_cm_list.size() == 0) create_white_adjusted_cm_list();
     
     
 }
-
-#define DEBUG
 
 static int note_to_piano_index(int octave_and_note) {
     const int numerical_note_to_note_index[] = {
@@ -245,7 +169,7 @@ static int note_to_piano_index(int octave_and_note) {
     return octave_to_note_index[octave]+note_index;
 }
 
-void piano::fill_missing_white_keys(struct piano_keys_info &white_keys_info) {
+void PianoInfo::fill_missing_white_keys(void) {
     int total_missing_count = 52-white_keys_info.keys_rectangle_list.size();
     int filled_count = 0;
     if(total_missing_count == 0) return;
@@ -270,7 +194,8 @@ void piano::fill_missing_white_keys(struct piano_keys_info &white_keys_info) {
     int key_shape_list_notes[] = {10,12,1,3,5,6,8,10,12,1,3,5,6,8,10,12,1,3,5,6,8,10,12,1,3,5,6,8,10,12,1,3,5,6,8,10,12,1,3,5,6,8,10,12,1,3,5,6,8,10,12,1};
     int key_shape_list_notes_octave[] = {0,0, 1,1,1,1,1,1,1, 2,2,2,2,2,2,2, 3,3,3,3,3,3,3, 4,4,4,4,4,4,4, 5,5,5,5,5,5,5, 6,6,6,6,6,6,6, 7,7,7,7,7,7,7, 8};
 
-    Mat test_img = Mat::zeros(white_keys_info.piano_image.size() , CV_8UC3);
+    Mat test_img = Mat::zeros(piano_image.size() , CV_8UC3);
+
     for(std::tuple<int , int , int>missing_key : missing_keys) {
         bool exit = false;
         int missing_key_index       = std::get<0>(missing_key);
@@ -321,16 +246,18 @@ void piano::fill_missing_white_keys(struct piano_keys_info &white_keys_info) {
         }
     }
     white_keys_info.dist_between_keys_list.clear();
-    white_keys_info.cm_dist_from_bestfit_list.clear();
     white_keys_info.missing_key_count_list.clear();
     white_keys_info.missing_key_spots_list.clear();
-    white_keys_info.key_adjusted_cm_list.clear();
+    white_keys_info.keys_rectangle_pivot.clear();
+
+    this->key_adjusted_cm_list.clear();
 
     write_keys_info(white_keys_info);
+    write_pivot_info(*this , white);
     imshow("newly_added" , test_img);
 }
 
-void piano::adjust_wrong_white_notes(struct piano_keys_info &white_keys_info) {
+void PianoInfo::adjust_wrong_white_notes(void) {
     int key_shape_list_notes[] =        {10,12, 1,3,5,6,8,10,12, 1,3,5,6,8,10,12, 1,3,5,6,8,10,12, 1,3,5,6,8,10,12, 1,3,5,6,8,10,12, 1,3,5,6,8,10,12, 1,3,5,6,8,10,12, 1};
     std::vector<std::vector<std::pair<int , int>>>consecutive_key_notes_list;
     
@@ -349,9 +276,8 @@ void piano::adjust_wrong_white_notes(struct piano_keys_info &white_keys_info) {
     }
     std::cout << "consecutive part : " << index << " ~ " << white_keys_info.keys_rectangle_list.size()-1 << "\n";
 
-    if(white_keys_info.flipped) std::reverse(std::begin(key_shape_list_notes) , std::end(key_shape_list_notes));
+    if(this->flipped) std::reverse(std::begin(key_shape_list_notes) , std::end(key_shape_list_notes));
     // very inefficient but will do the job
-    int current_index = 0;
     for(std::vector<std::pair<int , int>>consecutive : consecutive_key_notes_list) {
         std::cout << "consecutive part ---- \n";
         int max_matching_index = 0;
@@ -361,7 +287,6 @@ void piano::adjust_wrong_white_notes(struct piano_keys_info &white_keys_info) {
         }
         std::cout << "\b \n";
         for(int i = 0; i <= (sizeof(key_shape_list_notes)/sizeof(int))-consecutive.size(); i++) {
-            
             int matching = 0;
             for(int j = 0; j < consecutive.size(); j++) {
                 if(NOTE(consecutive[j].first) == key_shape_list_notes[i+j]) matching++;
