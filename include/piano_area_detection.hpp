@@ -1,7 +1,7 @@
 #ifndef _PIANO_AREA_DETECTION_HPP_
 #define _PIANO_AREA_DETECTION_HPP_
 
-#include <piano_essentials.hpp>
+#include <piano_detection.hpp>
 
 class PianoRecognition {
     public:
