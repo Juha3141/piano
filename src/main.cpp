@@ -107,16 +107,17 @@ else {
 
     std::cout << "detecting white key shapes... \n";
     piano_info.detect_white_key_shapes();
-    std::cout << "detecting white key notes... `\n";
+    std::cout << "detecting white key notes... \n";
     piano_info.detect_white_key_notes();
     piano_info.adjust_wrong_white_notes();
-    debug_print_both(piano_info , "before_filling");
+
+    debug_print_notes(piano_info , white , "before_filling");
     std::cout << "filling the missing white keys out... \n";
     piano_info.fill_missing_white_keys();
 
-
     piano_info.detect_black_key_notes();
-    debug_print_notes(piano_info , "white_key_notes");
+    debug_print_notes(piano_info , white , "white_key_notes");
+    debug_print_notes(piano_info , black , "black_key_notes");
 
     std::cout << "white keys count : " << piano_info.white_keys_info.keys_rectangle_list.size() << "\n";
     std::cout << "black keys count : " << piano_info.black_keys_info.keys_rectangle_list.size() << "\n";
