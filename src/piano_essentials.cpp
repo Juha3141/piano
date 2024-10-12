@@ -175,7 +175,7 @@ void write_pivot_info(PianoInfo &piano_info , white_or_black_t white_or_black) {
     cvtColor(keys_info.piano_image , pivot_image , COLOR_GRAY2BGR);
 #endif
     for(int i = 0; i < keys_info->keys_rectangle_list.size(); i++) {
-        std::vector<Point2f>pts;
+        Point2f pts[4];
         keys_info->keys_rectangle_list[i].points(pts);
         // 0,1 <--> 2,3
         // 1,2 <--> 3,0
@@ -237,7 +237,7 @@ void write_pivot_info(PianoInfo &piano_info , white_or_black_t white_or_black) {
         // use internal division to calculate the coordinate of the pivot
         pivot = Point(((m*midpoint_a.x+n*midpoint.x)/(m+n)) , ((m*midpoint_a.y+n*midpoint.y)/(m+n)));
         
-        keys_info->keys_rectangle_pivot.push_back(pivot);
+        keys_info->keys_rectangle_pivot.push_back(std::pair<Point , bool>(pivot , pivot.x > keys_info->keys_rectangle_list[i].center.x));
 #ifdef DEBUG
         std::vector<Point>dc;
         rotated_rect_to_contour(keys_info.keys_rectangle_list[i] , dc);
