@@ -57,22 +57,23 @@ void debug_print_both(PianoInfo &piano_info , const char *win) {
     imshow(win , image);
 }
 
-void debug_print_notes(PianoInfo &piano_info , const char *win) {
+void debug_print_notes(PianoInfo &piano_info , white_or_black_t white_or_black , const char *win) {
     Mat image = Mat::zeros(piano_info.piano_image.size() , CV_8UC3);
+    piano_keys_info_t *keys_info = white_or_black ? (piano_keys_info_t *)&piano_info.white_keys_info : (piano_keys_info_t *)&piano_info.black_keys_info;
     cvtColor(piano_info.piano_image , image , COLOR_GRAY2BGR);
-    if(piano_info.white_keys_info.key_notes.size() != piano_info.white_keys_info.keys_rectangle_list.size()) {
+    if(keys_info->key_notes.size() != keys_info->keys_rectangle_list.size()) {
         std::cout << "key notes discrepency error!\n";
         return;
     }
-    for(int i = 0; i < piano_info.white_keys_info.keys_rectangle_list.size(); i++) {
+    for(int i = 0; i < keys_info->keys_rectangle_list.size(); i++) {
         std::vector<Point>rectangle_contour;
-        rotated_rect_to_contour(piano_info.white_keys_info.keys_rectangle_list[i] , rectangle_contour);
+        rotated_rect_to_contour(keys_info->keys_rectangle_list[i] , rectangle_contour);
         drawContours(image , std::vector<std::vector<Point>>({rectangle_contour}) , -1 , Scalar(0xff , 0x00 , 0x00) , 1);
 
         // putText(image , std::to_string(i) , piano_info.white_keys_info.keys_rectangle_list[i].center , FONT_HERSHEY_SIMPLEX , 0.4 , Scalar(0x00 , 0x00 , 0x00) , 1);
-        int dx = -(piano_info.white_keys_info.keys_rectangle_list[i].size.height/3)*sin(piano_info.white_keys_info.keys_rectangle_list[i].angle*M_PI/180.0f);
-        int dy = (piano_info.white_keys_info.keys_rectangle_list[i].size.height/3)*cos(piano_info.white_keys_info.keys_rectangle_list[i].angle*M_PI/180.0f);
-        putText(image , number_to_note_string(piano_info.white_keys_info.key_notes[i].first) , Point(piano_info.white_keys_info.keys_rectangle_list[i].center.x+dx , piano_info.white_keys_info.keys_rectangle_list[i].center.y+dy) , FONT_HERSHEY_SIMPLEX , 0.4 , Scalar(0x00 , 0x00 , 0xff) , 1);
+        int dx = -(piano_info.flipped ? -1 : 1)*(keys_info->keys_rectangle_list[i].size.height/3)*sin(keys_info->keys_rectangle_list[i].angle*M_PI/180.0f);
+        int dy = (piano_info.flipped ? -1 : 1)*(keys_info->keys_rectangle_list[i].size.height/3)*cos(keys_info->keys_rectangle_list[i].angle*M_PI/180.0f);
+        putText(image , number_to_note_string(keys_info->key_notes[i].first) , Point(keys_info->keys_rectangle_list[i].center.x+dx , keys_info->keys_rectangle_list[i].center.y+dy) , FONT_HERSHEY_SIMPLEX , 0.4 , Scalar(0x00 , 0x00 , 0xff) , 1);
         
     }
     imshow(win , image);
