@@ -56,9 +56,12 @@ typedef struct piano_keys_info_s {
     std::vector<std::pair<int , int>>key_notes;
     
     // list of pivot points of the rectangles
-    std::vector<cv::Point>keys_rectangle_pivot;
+    // Point : point of the pivot
+    // bool  : location of the pivot, if pivot's x coord is larger than center of mass, this value is true.
+    //         Otherwise it's false.
+    std::vector<std::pair<cv::Point , bool>>keys_rectangle_pivot;
 
-    // Distance between #0 and #1 = #0
+    // Distance between #0 and #1 = at item #0
     std::vector<double>dist_between_keys_list;
 }piano_keys_info_t;
 
@@ -70,7 +73,7 @@ typedef struct white_piano_keys_info_s : piano_keys_info_t {
 }white_piano_keys_info_t;
 
 typedef struct black_piano_keys_info_s : piano_keys_info_t {
-
+    
 }black_piano_keys_info_t;
 
 struct PianoInfo {
@@ -108,10 +111,11 @@ struct PianoInfo {
 
     private:
         void create_white_adjusted_cm_list(void);
-        // bool  : true = white, false = black
-        // Point : center of mass point
-        // int   : index based on each keys_rectangle_list[] array
-        std::vector<std::tuple<bool , cv::Point , int>>key_adjusted_cm_list;
+        // bool   : true = white, false = black
+        // Point  : center of mass point
+        // int    : index based on each keys_rectangle_list[] array
+        // double : distance (based on the center of mass) between the key that follows
+        std::vector<std::tuple<bool , cv::Point , int , double>>key_adjusted_cm_list;
 };
 
 typedef enum white_or_black_e {
