@@ -427,7 +427,11 @@ template <typename T> static void region_divider(std::vector<T>&data_list , int 
 
 void PianoInfo::adjust_key_angles(piano_keys_info_t &keys_info) {
     std::vector<double>rect_angle_list;
-    for(RotatedRect r : keys_info.keys_rectangle_list) { rect_angle_list.push_back(r.angle); }
+    for(RotatedRect r : keys_info.keys_rectangle_list) { rect_angle_list.push_back(r.angle); 
+    std::cout << r.angle << ","; }
+    std::cout << "\n";
+    std::cout << "keys_info.keys_rectangle_list.size() = " << keys_info.keys_rectangle_list.size() << "\n";
+    std::cout << "rect_angle_list.size() = " << rect_angle_list.size() << "\n";
 #if 0
     Mat image_copy = Mat::zeros(piano_image.size() , CV_8UC3);
     cvtColor(piano_image , image_copy , COLOR_GRAY2BGR);
@@ -436,6 +440,10 @@ void PianoInfo::adjust_key_angles(piano_keys_info_t &keys_info) {
     double Q3 = calculate_percentile(rect_angle_list , 0.75);
     double left_whisker = Q1-1.5*(Q3-Q1);
     double right_whisker = Q3+1.5*(Q3-Q1);
+    std::cout << "Q1 : " << Q1 << "\n";
+    std::cout << "Q3 : " << Q3 << "\n";
+    std::cout << "left whisker  : " << left_whisker << "\n";
+    std::cout << "right whisker : " << right_whisker << "\n";
 
     // calculate the regional median
     std::vector<std::vector<RotatedRect>>rect_divided_by_region;
@@ -457,7 +465,7 @@ void PianoInfo::adjust_key_angles(piano_keys_info_t &keys_info) {
         rotated_rect_to_contour(keys_info.keys_rectangle_list[i] , dc);
         drawContours(image_copy , std::vector<std::vector<Point>>({dc}) , -1 , Scalar(0x00 , 0xff , 0xff) , 1);
 #endif
-        if(keys_info.keys_rectangle_list[i].angle >= right_whisker||keys_info.keys_rectangle_list[i].angle <= left_whisker) {
+        if(keys_info.keys_rectangle_list[i].angle > right_whisker||keys_info.keys_rectangle_list[i].angle < left_whisker) {
             // rotate the rectangle by its tip point
             Point2f pts[4];
             RotatedRect rr = keys_info.keys_rectangle_list[i];
@@ -468,15 +476,16 @@ void PianoInfo::adjust_key_angles(piano_keys_info_t &keys_info) {
 
             int x0 , y0;
             if(keys_info.keys_rectangle_pivot.size() == 0) {
+                // use alternative pivot
                 x0 = rr.center.x+(rr.size.height/2)*sin(rr.angle*M_PI/180.0f);
                 y0 = rr.center.y-(rr.size.height/2)*cos(rr.angle*M_PI/180.0f);
             }
             else {
-                x0 = keys_info.keys_rectangle_pivot[i].x;
-                y0 = keys_info.keys_rectangle_pivot[i].y;
+                x0 = keys_info.keys_rectangle_pivot[i].first.x;
+                y0 = keys_info.keys_rectangle_pivot[i].first.y;
             }
+            
             int x = keys_info.keys_rectangle_list[i].center.x , y = keys_info.keys_rectangle_list[i].center.y;
-
             int rotated_x = rotational_matrix_x(x , y , delta_theta*M_PI/180.0f , x0 , y0);
             int rotated_y = rotational_matrix_y(x , y , delta_theta*M_PI/180.0f , x0 , y0);
 #if 0
@@ -505,7 +514,7 @@ void PianoInfo::adjust_key_widths(piano_keys_info_t &keys_info) {
     double width_median = keys_info.median_key_width;
     for(int i = 0; i < keys_info.keys_rectangle_list.size(); i++) {
         if(keys_info.keys_rectangle_list[i].size.width > 1.4*width_median) {
-            adjust_rotated_rect_width(keys_info.keys_rectangle_list[i] , width_median);
+            adjust_rotated_rect_width(keys_info.keys_rectangle_list[i] , width_median , keys_info.keys_rectangle_pivot[i].second);
         }
     }
 }
