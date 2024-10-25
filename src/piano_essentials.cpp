@@ -107,18 +107,18 @@ void adjust_rotated_rect_width(RotatedRect &rect , int new_width , bool directio
 
 const char *number_to_note_string(int note_number) {
     switch(NOTE(note_number)) {
-        case PIANO_KEY_C:      return "C";
-        case PIANO_KEY_Csharp: return "C#";
-        case PIANO_KEY_D:      return "D";
-        case PIANO_KEY_Dsharp: return "D#";
-        case PIANO_KEY_E:      return "E";
-        case PIANO_KEY_F:      return "F";
-        case PIANO_KEY_Fsharp: return "F#";
-        case PIANO_KEY_G:      return "G";
-        case PIANO_KEY_Gsharp: return "G#";
-        case PIANO_KEY_A:      return "A";
-        case PIANO_KEY_Asharp: return "A#";
-        case PIANO_KEY_B:      return "B";
+        case NOTE_C:      return "C";
+        case NOTE_Csharp: return "C#";
+        case NOTE_D:      return "D";
+        case NOTE_Dsharp: return "D#";
+        case NOTE_E:      return "E";
+        case NOTE_F:      return "F";
+        case NOTE_Fsharp: return "F#";
+        case NOTE_G:      return "G";
+        case NOTE_Gsharp: return "G#";
+        case NOTE_A:      return "A";
+        case NOTE_Asharp: return "A#";
+        case NOTE_B:      return "B";
     }
     return "?";
 }

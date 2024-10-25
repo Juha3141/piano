@@ -16,23 +16,23 @@
 #include <opencv2/features2d.hpp>
 #include <opencv2/xfeatures2d.hpp>
 
-#define PIANO_KEY_C      1
-#define PIANO_KEY_Csharp 2
-#define PIANO_KEY_Dflat  2
-#define PIANO_KEY_D      3
-#define PIANO_KEY_Dsharp 4
-#define PIANO_KEY_Eflat  4
-#define PIANO_KEY_E      5
-#define PIANO_KEY_F      6
-#define PIANO_KEY_Fsharp 7
-#define PIANO_KEY_Gflat  7
-#define PIANO_KEY_G      8
-#define PIANO_KEY_Gsharp 9
-#define PIANO_KEY_Aflat  9
-#define PIANO_KEY_A      10
-#define PIANO_KEY_Asharp 11
-#define PIANO_KEY_Bflat  11
-#define PIANO_KEY_B      12
+#define NOTE_C      1
+#define NOTE_Csharp 2
+#define NOTE_Dflat  2
+#define NOTE_D      3
+#define NOTE_Dsharp 4
+#define NOTE_Eflat  4
+#define NOTE_E      5
+#define NOTE_F      6
+#define NOTE_Fsharp 7
+#define NOTE_Gflat  7
+#define NOTE_G      8
+#define NOTE_Gsharp 9
+#define NOTE_Aflat  9
+#define NOTE_A      10
+#define NOTE_Asharp 11
+#define NOTE_Bflat  11
+#define NOTE_B      12
 
 #define PIANO_KEY_TYPE_LEFT   1
 #define PIANO_KEY_TYPE_MIDDLE 2
@@ -101,6 +101,9 @@ struct PianoInfo {
 
         // black keys
         void detect_black_key_notes(void);
+
+        /***** Additional Functions *****/
+        void elongate_white_keys(void);
 
         cv::Mat piano_image;
         cv::RotatedRect piano_bounding_rect;
