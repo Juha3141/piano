@@ -11,6 +11,9 @@
 
 #include <opencv2/opencv.hpp>
 
+#include <piano_detection.hpp>
+#include <midi_system.hpp>
+
 typedef struct {
     int width;
     int height;
@@ -53,6 +56,10 @@ namespace hand_detection {
     bool fetch_hand_data(cv::Mat &current_frame , hands_info_t &hands);
     bool check_agent_running(void);
 
+    void detect_key_landmark_overlaps(cv::Mat &frame , hands_info_t &hands , 
+        std::vector<piano_note_info_t>&white_finger_list , std::vector<piano_note_info_t>&black_finger_list , 
+        PianoInfo &piano_info , std::vector<cv::RotatedRect>&relocated_white_rects , std::vector<cv::RotatedRect>&relocated_black_rects);
+    void compare_with_music_sheet(std::vector<piano_note_info_t>&white_finger_list , std::vector<piano_note_info_t>&black_finger_list , std::vector<piano_note_info_t>&music_sheet , std::vector<std::pair<int , bool>>&correctly_placed_fingers);
     void end(void);
 }
 
