@@ -116,6 +116,7 @@ else {
     piano_info.fill_missing_white_keys();
 
     piano_info.detect_black_key_notes();
+    piano_info.elongate_white_keys();
     debug_print_notes(piano_info , white , "white_key_notes");
     debug_print_notes(piano_info , black , "black_key_notes");
 
@@ -135,80 +136,48 @@ if(!is_video) {
     hand_detection::execute_agent();
     int piano_loc_x = piano_recognizer.piano_loc_x;
     int piano_loc_y = piano_recognizer.piano_loc_y;
+    std::vector<RotatedRect>white_rectangle_copy , black_rectangle_copy;
+    std::copy(piano_info.white_keys_info.keys_rectangle_list.begin() , piano_info.white_keys_info.keys_rectangle_list.end() , std::back_inserter(white_rectangle_copy));
+    std::copy(piano_info.black_keys_info.keys_rectangle_list.begin() , piano_info.black_keys_info.keys_rectangle_list.end() , std::back_inserter(black_rectangle_copy));
+    relocate_rotated_rect_list(white_rectangle_copy , piano_loc_x , piano_loc_y);
+    relocate_rotated_rect_list(black_rectangle_copy , piano_loc_x , piano_loc_y);
+
+    int music_sheet_index = 0;
+    std::vector<std::vector<piano_note_info_t>>music_sheet = {
+        {{TO_NOTE(NOTE_G , 3),0,0} , {TO_NOTE(NOTE_B , 3),0,0} , {TO_NOTE(NOTE_D , 4),0,0} , {TO_NOTE(NOTE_Fsharp , 4),0,0} , {TO_NOTE(NOTE_G , 4),0,0}}
+    };
+    std::cout << "NOTE TO PLAY : " << "\n";
+    for(piano_note_info_t t : music_sheet[music_sheet_index]) {
+        std::cout << number_to_note_string(t.note) << OCTAVE(t.note) << "(" << t.finger_number << ") ";
+    }
+    std::cout << "\n";
     while(1) {
         Mat frame;
         hands_info_t hands_info;
         if(!hand_detection::fetch_hand_data(frame , hands_info)) continue;
 
-        std::vector<RotatedRect>white_rectangle_copy , black_rectangle_copy;
-        std::copy(piano_info.white_keys_info.keys_rectangle_list.begin() , piano_info.white_keys_info.keys_rectangle_list.end() , std::back_inserter(white_rectangle_copy));
-        std::copy(piano_info.black_keys_info.keys_rectangle_list.begin() , piano_info.black_keys_info.keys_rectangle_list.end() , std::back_inserter(black_rectangle_copy));
-        relocate_rotated_rect_list(white_rectangle_copy , piano_loc_x , piano_loc_y);
-        relocate_rotated_rect_list(black_rectangle_copy , piano_loc_x , piano_loc_y);
+        
+        // first  : indicates the note
+        // second : right/left hand, true : right, false : left
+        // third  : indicates the finger number
+        std::vector<piano_note_info_t>white_finger_list;
+        std::vector<piano_note_info_t>black_finger_list;
 
-        Scalar white_key_color(0x00 , 0xff , 0x00);
-        Scalar black_key_color(0x00 , 0xff , 0xff);
-        for(int c = 0; c < white_rectangle_copy.size(); c++) {
-            std::vector<Point>rc;
-            rotated_rect_to_contour(white_rectangle_copy[c] , rc);
-            drawContours(frame , std::vector<std::vector<Point>>({rc}) , -1 , white_key_color , 2);
-            putText(frame , number_to_note_string(piano_info.white_keys_info.key_notes[c].first) , Point(white_rectangle_copy[c].center.x , white_rectangle_copy[c].center.y+(white_rectangle_copy[c].size.height/3)) , FONT_HERSHEY_SIMPLEX , 0.3 , Scalar(0x00 , 0x00 , 0xff) , 1);
-        }
-        for(int c = 0; c < black_rectangle_copy.size(); c++) {
-            std::vector<Point>rc;
-            rotated_rect_to_contour(black_rectangle_copy[c] , rc);
-            drawContours(frame , std::vector<std::vector<Point>>({rc}) , -1 , black_key_color , 2);
-        }
-        bool hand_on_black_left = false;
-        bool hand_on_black_right = false;
-        if(hands_info.left_hand_visible) {
-            for(int i : std::vector<int>({4 , 8 , 12 , 16 , 20})) {
-                int x = hands_info.left_hand_landmarks_xlist[i] , y = hands_info.left_hand_landmarks_ylist[i];
-                for(int c = 0; c < black_rectangle_copy.size(); c++) {
-                    std::vector<Point>rc;
-                    rotated_rect_to_contour(black_rectangle_copy[c] , rc);
-                    if(pointPolygonTest(rc , Point(x , y) , false) > 0) {
-                        drawContours(frame , std::vector<std::vector<Point>>({rc}) , -1 , Scalar(0xff , 0x00 , 0x00) , 2);
-                        hand_on_black_left = true;
-                    }
-                }
-                if(hand_on_black_left == false) { 
-                    for(int c = 0; c < white_rectangle_copy.size(); c++) {
-                        std::vector<Point>rc;
-                        rotated_rect_to_contour(white_rectangle_copy[c] , rc);
-                        if(pointPolygonTest(rc , Point(x , y) , false) > 0) {
-                            drawContours(frame , std::vector<std::vector<Point>>({rc}) , -1 , Scalar(0xff , 0x00 , 0x00) , 2);
-                        }
-                    }
-                }
-                circle(frame , Point(x , y) , 2 , Scalar(0x00 , 0xff , 0x00));
-                putText(frame , std::to_string(i) , Point(x , y)  , FONT_HERSHEY_SIMPLEX , 0.5 , Scalar(0x00 , 0x00 , 0xff) , 2);
+        std::vector<piano_note_info_t>total_finger_list;
+
+        hand_detection::detect_key_landmark_overlaps(frame , hands_info , white_finger_list , black_finger_list , piano_info , white_rectangle_copy , black_rectangle_copy);
+        // std::cout << "-----------------\n";
+
+        std::vector<std::pair<int , bool>>correctly_placed_fingers; // fingers that are located on the keys to press
+
+        hand_detection::compare_with_music_sheet(white_finger_list , total_finger_list , music_sheet[music_sheet_index] , correctly_placed_fingers);
+
+        if(correctly_placed_fingers.size() != 0) {
+            std::cout << " ----- good ones ----- \n";
+            for(std::pair<int , bool>p : correctly_placed_fingers) {
+                std::cout << "finger #" << p.first << "\n";
             }
-        }
-        if(hands_info.right_hand_visible) {
-            for(int i : std::vector<int>({4 , 8 , 12 , 16 , 20})) {
-                int x = hands_info.right_hand_landmarks_xlist[i] , y = hands_info.right_hand_landmarks_ylist[i];
-                for(int c = 0; c < black_rectangle_copy.size(); c++) {
-                    std::vector<Point>rc;
-                    rotated_rect_to_contour(black_rectangle_copy[c] , rc);
-                    if(pointPolygonTest(rc , Point(x , y) , false) > 0) {
-                        drawContours(frame , std::vector<std::vector<Point>>({rc}) , -1 , Scalar(0xff , 0x00 , 0x00) , 2);
-                        hand_on_black_right = true;
-                        std::cout << "finger #" << i << " : " << piano_info.black_keys_info.key_notes[i].first << "\n";
-                    }
-                }
-                if(!hand_on_black_right) {
-                    for(int c = 0; c < white_rectangle_copy.size(); c++) {
-                        std::vector<Point>rc;
-                        rotated_rect_to_contour(white_rectangle_copy[c] , rc);
-                        if(pointPolygonTest(rc , Point(x , y) , false) > 0) {
-                            drawContours(frame , std::vector<std::vector<Point>>({rc}) , -1 , Scalar(0xff , 0x00 , 0x00) , 2);
-                        }
-                    }
-                }
-                circle(frame , Point(x , y) , 2 , Scalar(0xff , 0x0 , 0x00));
-                putText(frame , std::to_string(i) , Point(x , y)  , FONT_HERSHEY_SIMPLEX , 0.5 , Scalar(0xff , 0x00 , 0x00) , 2);
-            }
+            
         }
         imshow("ai" , frame);
         if(hand_detection::check_agent_running() == false) {
