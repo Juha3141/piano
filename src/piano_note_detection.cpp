@@ -507,3 +507,10 @@ void PianoInfo::fill_missing_white_keys(void) {
     imshow("range" , test_img_2);
 #endif
 }
+
+void PianoInfo::elongate_white_keys(void) {
+    for(int i = 0; i < white_keys_info.keys_rectangle_list.size(); i++) {
+        double old_height = white_keys_info.keys_rectangle_list[i].size.height;
+        adjust_rotated_rect_height(white_keys_info.keys_rectangle_list[i] , old_height*1.1 , flipped);
+    }
+}
