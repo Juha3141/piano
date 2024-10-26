@@ -173,11 +173,7 @@ if(!is_video) {
         hand_detection::compare_with_music_sheet(white_finger_list , total_finger_list , music_sheet[music_sheet_index] , correctly_placed_fingers);
 
         if(correctly_placed_fingers.size() != 0) {
-            std::cout << " ----- good ones ----- \n";
-            for(std::pair<int , bool>p : correctly_placed_fingers) {
-                std::cout << "finger #" << p.first << "\n";
-            }
-            
+            // send the vibration
         }
         imshow("ai" , frame);
         if(hand_detection::check_agent_running() == false) {

@@ -22,19 +22,19 @@ bool PianoRecognition::process_piano_calibration(void) {
     namedWindow("win1");
     std::vector<Point>contour;
     Rect bounding_rect;
-    std::vector<Point>prev_contour;
-    Rect prev_bounding_rect;
-
-    int overlap_streak = 0;
-    const int overlap_streak_threshold = 40;
     
     Mat debug_copy;
+    bool no_piano_found = false;
+    int no_piano_found_display = 0;
     while(1) {
         Mat frame;
         if(video.read(frame) == false) {
             std::cout << "video error!\n";
             return false;
         }
+        if(no_piano_found_display >= 10) { no_piano_found_display = 0; no_piano_found = false; }
+        if(no_piano_found) no_piano_found_display++;
+
         this->filter_function(frame);
         int width = 800;
         std::cout << "resized : " << Size(width , ((float)frame.size().height*((float)width/(float)frame.size().width))) << "\n";
@@ -43,43 +43,24 @@ bool PianoRecognition::process_piano_calibration(void) {
         // for debugging purpose
         
         frame.copyTo(debug_copy);
+        if(no_piano_found) putText(debug_copy , "No piano found!" , Point(0 , 30) , FONT_HERSHEY_SIMPLEX , 1 , Scalar(0xff , 0x00 , 0x00) , 3);
 
-        if(recognize_piano(frame , contour) == false) {
-            putText(debug_copy , "No piano found!" , Point(0 , 30) , FONT_HERSHEY_SIMPLEX , 1 , Scalar(0xff , 0x00 , 0x00) , 3);
-            overlap_streak = std::max(overlap_streak-1 , 0);
-        }
-        else {
-            bounding_rect = boundingRect(contour);
-
-            // std::vector<std::vector<Point>>contour_list = {contour};
-            // drawContours(debug_copy , contour_list , 0 , Scalar(0x00 , 0xff , 0x00) , 4);
-            // rectangle(debug_copy , bounding_rect , Scalar(0x00 , 0x00 , 0xff) , 4);
-        }
-
-        double area_overlap = (bounding_rect & prev_bounding_rect).area();
-        double area_current = bounding_rect.area();
-        std::cout << "area_overlap = " << area_overlap << "\n";
-        std::cout << "area_current = " << area_current << "\n";
-        if(area_overlap >= area_current*0.90 && area_overlap != 0) {
-            overlap_streak += 2;
-            std::cout << " ---- overlap_streak : " << overlap_streak << "\n";
-            
-            // the piano is finally recognized
-            if(overlap_streak >= overlap_streak_threshold) {
-                cv::RotatedRect rotated_rect;
-                rotated_rect = minAreaRect(contour);
-                
-                set_detected_piano_img(frame , contour , rotated_rect);
-                break;
+        imshow("win1" , debug_copy);
+        switch(waitKey(1)) {
+            case 27: return false;
+            case 13: {
+                if(recognize_piano(frame , contour) == false) {
+                    no_piano_found = true;
+                }
+                else {
+                    cv::RotatedRect rotated_rect;
+                    rotated_rect = minAreaRect(contour);
+                    
+                    set_detected_piano_img(frame , contour , rotated_rect);
+                    break;
+                }
             }
         }
-        
-        imshow("win1" , debug_copy);
-        if(waitKey(1) == 27) return false;
-
-        // copy prev
-        std::copy(contour.begin() , contour.end() , std::back_inserter(prev_contour));
-        memcpy(&prev_bounding_rect , &bounding_rect , sizeof(Rect));
     }
     video.release();
     return true;
